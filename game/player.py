@@ -404,7 +404,7 @@ class Player(Body):
                 self.spend(10)
                 world.freeze(3)
         for arrow in world.projectiles:
-            if arrow.hostile and rect_overlap(hx, hy, hw, hh, arrow):
+            if arrow.deflectable and rect_overlap(hx, hy, hw, hh, arrow):
                 arrow.deflect(world)
                 hit_any = True
         return hit_any

@@ -7,6 +7,7 @@ import pyxel
 
 from . import audio, controls, font, items, save
 from .config import LEVELS_DIR, SCREEN_W, TILE
+from .bosses import JarlBoss
 from .enemies import Archer, Draugr, Dummy, ShieldDraugr, Wolf
 from .entities import Chest, Decor, EdgeExit, Gate, Npc, Pickup, Runestone, Sign, Stela, overlap
 from .player import Player
@@ -35,6 +36,22 @@ class World:
         self.exit_to = None  # (локация, точка появления) — запрошенный переход
         self.near = None
         self.talk_npc = None
+        self.banner = None  # (заголовок, подзаголовок) вместо названия локации
+        self.pending_enemies = []
+
+        # --- босс и арена
+        meta = self.level.meta
+        boss_id = meta.get("boss")
+        self.boss = None
+        self.boss_defeated = bool(boss_id) and f"boss:{boss_id}" in st.flags
+        self.arena_trigger = int(meta["arena_trigger"]) * TILE if "arena_trigger" in meta else None
+        self.arena_door = []
+        if "arena_door" in meta:
+            dx, y0, y1 = (int(v) for v in meta["arena_door"].split())
+            self.arena_door = [(dx, ty) for ty in range(y0, y1 + 1)]
+        self.door_drop = 0.0  # 0 — решётка поднята, 1 — опущена
+        boss_chest = tuple(int(v) for v in meta["boss_chest"].split(",")) if "boss_chest" in meta else None
+        self.hidden_chest = None
 
         self.enemies = []
         self.pickups = []
@@ -61,6 +78,10 @@ class World:
                 self.enemies.append(Archer(px, py - Archer.h))
             elif ch == "U":
                 self.enemies.append(Dummy(px - 1, py - Dummy.h))
+            elif ch == "J":
+                if not self.boss_defeated:
+                    self.boss = JarlBoss(px - 4, py - JarlBoss.h)
+                    self.enemies.append(self.boss)
             elif ch in "oh":
                 uid = f"{ch}{tx},{ty}"
                 if self._key(uid) not in st.collected:
@@ -71,7 +92,10 @@ class World:
                 if self._key(chest.uid) in st.chests:
                     chest.loot = list(st.chests[self._key(chest.uid)])
                     chest.opened = not chest.loot
-                self.chests.append(chest)
+                if (tx, ty) == boss_chest and not self.boss_defeated:
+                    self.hidden_chest = chest  # награда появится после победы
+                else:
+                    self.chests.append(chest)
             elif ch in "RT":
                 point = Runestone(tx, ty) if ch == "R" else Stela(tx, ty)
                 point.active = self._key(point.uid) == st.save_point
@@ -86,6 +110,10 @@ class World:
                 self.edge_exits.append(EdgeExit(tx, ty, target, spawn_name))
             elif ch in "BIF":
                 self.decor.append(Decor(ch, tx, ty))
+
+        if boss_id:
+            for gate in self.gates:
+                gate.locked = not self.boss_defeated
 
         # Где появиться герою: точное место из сохранения, именованная точка или старт.
         if st.pos is not None:
@@ -156,6 +184,51 @@ class World:
         """Дымок из трубы: медленно поднимается и сносится ветром."""
         self.particles.append([x + random.uniform(-1, 1), y, random.uniform(0.05, 0.25),
                                random.uniform(-0.5, -0.3), random.randint(40, 70), random.choice((5, 6)), 0.0])
+
+    def show_banner(self, title, subtitle=""):
+        self.banner = (title, subtitle)
+        self.title_t = 180
+
+    def start_boss_fight(self, boss):
+        """Герой вошёл на арену: решётка падает, звучит боевая музыка."""
+        self.level.blocked.update(self.arena_door)
+        audio.sfx(audio.SLAM)
+        audio.music_start(audio.BOSS)
+        self.shake(4)
+        self.show_banner(boss.name, boss.subtitle)
+
+    def summon_wolves(self):
+        """Ярость ярла: из тьмы по краям арены выходят волки."""
+        boss = self.boss
+        ground = boss.y + boss.h
+        left = (self.arena_door[0][0] + 2) * TILE if self.arena_door else boss.x - 120
+        right = self.level.pixel_w - 5 * TILE
+        for x in (left, right):
+            wolf = Wolf(x, ground - Wolf.h)
+            wolf.facing = 1 if x < boss.x else -1
+            self.pending_enemies.append(wolf)
+            self.smoke(x + 7, ground - 6, 8)
+
+    def on_boss_defeated(self, boss):
+        st = self.state
+        st.flags.add(boss.flag)
+        self.boss_defeated = True
+        self.level.blocked.difference_update(self.arena_door)
+        for gate in self.gates:
+            gate.locked = False
+        if self.hidden_chest is not None:
+            self.chests.append(self.hidden_chest)
+            self.sparks(self.hidden_chest.x + 8, self.hidden_chest.y + 4, 16)
+            self.hidden_chest = None
+        for _ in range(boss.silver[0]):
+            coin = Pickup(boss.cx - 4, boss.y + 10, "coin")
+            coin.vx = random.uniform(-1.6, 1.6)
+            coin.vy = random.uniform(-3.4, -1.8)
+            self.pickups.append(coin)
+        self.smoke(boss.cx, boss.cy, 24)
+        audio.music_start(self.level.music)
+        self.show_banner("ЯРЛ ПОВЕРЖЕН", "Курган открыт")
+        self.save_game()
 
     def on_enemy_killed(self, enemy):
         self.smoke(enemy.cx, enemy.cy)
@@ -233,7 +306,11 @@ class World:
             self.talk_npc = obj if obj.talking else None
             audio.sfx(audio.MOVE)
         elif isinstance(obj, Gate):
-            self._leave(obj.target, obj.spawn)
+            if obj.locked:
+                self.toast("Заперто. Хозяин кургана ещё не повержен", 8)
+                audio.sfx(audio.DENY)
+            else:
+                self._leave(obj.target, obj.spawn)
 
     def _leave(self, target, spawn):
         if target == "end":
@@ -252,7 +329,10 @@ class World:
         p.update(self)
         for e in self.enemies:
             e.update(self)
-        self.enemies = [e for e in self.enemies if not e.dead]
+        self.enemies = [e for e in self.enemies if not e.dead] + self.pending_enemies
+        self.pending_enemies = []
+        closing = bool(self.arena_door) and self.arena_door[0] in self.level.blocked
+        self.door_drop = min(1.0, self.door_drop + 0.08) if closing else max(0.0, self.door_drop - 0.03)
         for arrow in self.projectiles:
             arrow.update(self)
         self.projectiles = [a for a in self.projectiles if not a.dead]
@@ -310,6 +390,20 @@ class World:
         return max(0, min(self.level.pixel_w - SCREEN_W, p.cx - SCREEN_W / 2 + look))
 
     # ------------------------------------------------------------ отрисовка
+    def _draw_arena_door(self):
+        """Кованая решётка, падающая сверху."""
+        tx = self.arena_door[0][0]
+        top = self.arena_door[0][1] * TILE
+        full = len(self.arena_door) * TILE
+        h = int(full * self.door_drop)
+        x = tx * TILE
+        pyxel.rect(x - 1, top - 3, 10, 3, 2)
+        for bx in (x, x + 3, x + 6):
+            pyxel.line(bx, top, bx, top + h - 1, 6)
+            pyxel.pset(bx, top + h, 15)
+        for yy in range(top + 6, top + h, 12):
+            pyxel.line(x - 1, yy, x + 8, yy, 5)
+
     def draw(self):
         cam = int(self.cam_x)
         if self.shake_t > 0:
@@ -325,6 +419,8 @@ class World:
         self.level.draw_tiles(cam)
         for obj in self.gates + self.edge_exits + self.signs + self.save_points + self.chests:
             obj.draw()
+        if self.door_drop > 0:
+            self._draw_arena_door()
         for d in self.decor:
             if d.kind == "F":
                 d.draw()

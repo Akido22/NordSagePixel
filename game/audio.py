@@ -24,6 +24,8 @@ CHARGED = 16
 HEAVY = 17
 BOW = 18
 GUARD_BREAK = 19
+ROAR = 25
+SLAM = 26
 
 _SFX = {
     JUMP: ("c2e2g2", "p", "4", "s", 4),
@@ -46,6 +48,8 @@ _SFX = {
     HEAVY: ("c2g1c1", "n", "765", "f", 5),
     BOW: ("g2d2", "p", "43", "f", 4),
     GUARD_BREAK: ("c3a2f2c2", "s", "6", "nnnf", 5),
+    ROAR: ("c1d1c1a0g0", "n", "77766", "vvvvf", 16),
+    SLAM: ("c1c1g0", "n", "776", "nnf", 6),
 }
 
 # Музыка: дорийский лад от ре — напев в духе северных гуслей.
@@ -77,8 +81,19 @@ _TOWN_BASS = (
     "c1rrr c1rrr d1rrr d1rrr"
 )
 
+# Битва с ярлом: быстрый напев в ре миноре, бас восьмыми, барабаны шумом.
+_BOSS_MELODY = (
+    "d3d3f3d3 a3d3g3f3 e3e3g3e3 c4b3a3g3 "
+    "d3d3f3d3 a3d3c4a3 g3f3e3c3 d3rd3r "
+    "f3f3a3f3 c4f3a3f3 e3e3g3e3 b3a3g3e3 "
+    "d4c4a3f3 g3e3c3e3 d3rd3d3 d3rrr"
+)
+_BOSS_BASS = " ".join(n * 8 for n in ("d1", "c1", "b0", "a0", "f1", "c1", "g0", "a0"))
+_BOSS_DRUMS = "c1rc4r c1c1c4r " * 8
+
 FOREST = 0
 TOWN = 1
+BOSS = 2
 
 
 def init():
@@ -91,6 +106,10 @@ def init():
     pyxel.sounds[23].set(_TOWN_MELODY, "t", "5", "f", 22)
     pyxel.sounds[24].set(_TOWN_BASS, "t", "3", "f", 22)
     pyxel.musics[TOWN].set([23], [24], [])
+    pyxel.sounds[27].set(_BOSS_MELODY, "s", "4", "n", 10)
+    pyxel.sounds[28].set(_BOSS_BASS, "p", "4", "f", 10)
+    pyxel.sounds[29].set(_BOSS_DRUMS, "n", "5", "f", 10)
+    pyxel.musics[BOSS].set([27], [28], [29])
 
 
 def sfx(idx):

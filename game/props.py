@@ -344,6 +344,55 @@ def _draw_wall(p):
     pyxel.line(x, b - 34, x + w - 1, b - 34, 2)
 
 
+# ---------------------------------------------------------------- курган
+def _draw_torch(p):
+    """Факел в железном держателе на стене."""
+    x, b = p.x + 3, p.base - 34
+    t = pyxel.frame_count
+    pyxel.line(x - 2, b + 6, x + 1, b + 2, 5)
+    pyxel.rect(x, b, 3, 7, 2)
+    flick = (t // 4 + p.seed) % 3
+    pyxel.tri(x - 1, b, x + 1.5, b - 6 - flick, x + 4, b, 9)
+    pyxel.tri(x, b, x + 1.5, b - 3 - flick, x + 3, b, 10)
+    pyxel.dither(0.04 + 0.02 * flick)
+    pyxel.circ(x + 1, b - 2, 14, 9)
+    pyxel.dither(1.0)
+
+
+def _draw_bones(p):
+    x, b = p.x, p.base
+    pyxel.line(x, b - 1, x + 7, b - 2, 7)
+    pyxel.pset(x - 1, b - 2, 7)
+    pyxel.pset(x + 8, b - 3, 7)
+    pyxel.line(x + 4, b - 1, x + 10, b - 4, 15)
+    pyxel.circ(x + 13, b - 3, 2, 7)  # череп
+    pyxel.pset(x + 12, b - 3, 0)
+    pyxel.pset(x + 14, b - 3, 0)
+
+
+def _draw_urn(p):
+    x, b = p.x + 2, p.base
+    pyxel.elli(x, b - 10, 10, 10, 4)
+    pyxel.rect(x + 3, b - 13, 4, 3, 4)
+    pyxel.line(x + 1, b - 6, x + 8, b - 6, 2)
+    pyxel.line(x + 2, b - 8, x + 7, b - 8, 10)
+
+
+def _draw_throne(p):
+    """Каменный трон ярла с черепами на подлокотниках."""
+    x, b, w = p.x, p.base, p.w
+    pyxel.rect(x + 4, b - 46, w - 8, 46, 5)
+    pyxel.rect(x + 6, b - 44, w - 12, 30, 1)
+    ui.rhombus(x + w // 2, b - 38, 3, 10)
+    pyxel.tri(x + 4, b - 46, x + w // 2, b - 56, x + w - 4, b - 46, 5)
+    pyxel.rect(x, b - 18, w, 6, 6)
+    pyxel.rect(x, b - 12, w, 12, 5)
+    for sx in (x + 3, x + w - 4):
+        pyxel.circ(sx, b - 21, 3, 7)
+        pyxel.pset(sx - 1, b - 21, 0)
+        pyxel.pset(sx + 1, b - 21, 0)
+
+
 _DRAW = {
     "izba": _draw_izba,
     "longhouse": _draw_longhouse,
@@ -356,9 +405,14 @@ _DRAW = {
     "oak": _draw_oak,
     "barrels": _draw_barrels,
     "wall": _draw_wall,
+    "torch": _draw_torch,
+    "bones": _draw_bones,
+    "urn": _draw_urn,
+    "throne": _draw_throne,
 }
 
 _DEFAULT_W = {"izba": 8, "longhouse": 14, "forge": 7, "well": 3, "stall": 6, "fence": 4,
-              "banner": 1, "lantern": 1, "oak": 2, "barrels": 2, "wall": 2}
+              "banner": 1, "lantern": 1, "oak": 2, "barrels": 2, "wall": 2,
+              "torch": 1, "bones": 2, "urn": 2, "throne": 5}
 
 KINDS = set(_DRAW)

@@ -15,7 +15,7 @@ SOLID_TILES = {gfx.TILE_GRASS, gfx.TILE_DIRT, gfx.TILE_STONE, gfx.TILE_LOG,
 _TILE_CHARS = {"S": gfx.TILE_STONE, "L": gfx.TILE_LOG, "=": gfx.TILE_PLANK, "^": gfx.TILE_SPIKES,
                "_": gfx.TILE_BOARDWALK, "%": gfx.TILE_FLAGSTONE}
 _DECOR_TILE_CHARS = {"g": gfx.TILE_TUFT, "m": gfx.TILE_MUSHROOM}
-OBJECT_CHARS = set("PRCWDKAUohEXTBIFY")
+OBJECT_CHARS = set("PRCWDKAUJohEXTBIFY")
 
 _TEXT_TOKENS = {
     "{UP}": font.ARROW_UP,
@@ -47,6 +47,7 @@ class Level:
         self.spawns = {}  # имя -> (x, y)
         self.props = []  # (вид, x, y, ширина)
         self.npcs = []  # (x, y, id)
+        self.blocked = set()  # (x, y) тайлов, временно ставших стеной (решётка арены)
         rows = []
         section = None
         with open(path, encoding="utf-8") as f:
@@ -118,7 +119,7 @@ class Level:
         return self.tiles[ty][tx]
 
     def is_solid(self, tx, ty):
-        return self.tile_at(tx, ty) in SOLID_TILES
+        return self.tile_at(tx, ty) in SOLID_TILES or (tx, ty) in self.blocked
 
     def is_platform(self, tx, ty):
         return self.tile_at(tx, ty) == gfx.TILE_PLANK
@@ -185,8 +186,35 @@ class Background:
     def draw(self, cam_x):
         if self.style == "town":
             self._draw_town(cam_x)
+        elif self.style == "barrow":
+            self._draw_barrow(cam_x)
         else:
             self._draw_forest(cam_x)
+
+    def _draw_barrow(self, cam_x):
+        """Курган изнутри: кладка из валунов, корни, резные руны в полутьме."""
+        pyxel.cls(0)
+        off = cam_x * 0.6
+        for row in range(0, SCREEN_H, 14):
+            shift = 9 if (row // 14) % 2 else 0
+            for i in range(-1, SCREEN_W // 18 + 2):
+                bx = i * 18 + shift - off % 18
+                seed = int(i + (off // 18) + row * 7)
+                col = 1 if seed % 9 else 13
+                pyxel.rect(bx + 1, row + 1, 16, 12, col)
+                if seed % 11 == 0:  # руна на камне
+                    pyxel.line(bx + 8, row + 3, bx + 8, row + 10, 5)
+                    pyxel.line(bx + 8, row + 4, bx + 11, row + 7, 5)
+        pyxel.dither(0.5)
+        pyxel.rect(0, 0, SCREEN_W, SCREEN_H, 0)
+        pyxel.dither(1.0)
+        # Свисающие корни.
+        for i in range(0, 512, 37):
+            x = (i - cam_x * 0.8) % 512 - 40
+            if -10 < x < SCREEN_W + 10:
+                h = 18 + (i * 7) % 26
+                pyxel.line(x, 0, x + 2, h, 2)
+                pyxel.line(x + 2, h, x + 1, h + 6, 2)
 
     def _draw_town(self, cam_x):
         t = pyxel.frame_count

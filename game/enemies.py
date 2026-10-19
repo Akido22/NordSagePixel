@@ -428,6 +428,10 @@ class Arrow:
         self.dead = False
         self.life = 200
 
+    @property
+    def deflectable(self):
+        return self.hostile
+
     def deflect(self, world):
         """Отбита ударом или парированием — летит обратно и ранит врагов."""
         self.vx = -self.vx * 1.3

@@ -1,0 +1,68 @@
+# Курган ярла Хрёрека — арена первого босса.
+# Легенда как в test_level.txt, плюс:
+#  J  ярл-драугр Хрёрек (босс)   E  каменный проход (заперт, пока босс жив)
+# В [meta]: boss — id босса, arena_trigger — столбец, за которым босс просыпается,
+#   arena_door — решётка «столбец строка_верх строка_низ», boss_chest — сундук-награда.
+[meta]
+title = Курган ярла
+subtitle = Здесь спит Хрёрек
+sky = barrow
+music = 0
+boss = jarl
+arena_trigger = 24
+arena_door = 18 13 19
+boss_chest = 57,19
+
+[map]
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS............................................SS
+SSSSSSSSSSSSSSSSSS............................................SS
+SSSSSSSSSSSSSSSSSS............................................SS
+SSSSSSSSSSSSSSSSSS............................................SS
+SSSSSSSSSSSSSSSSSS............................................SS
+SSSSSSSSSSSSSSSSSS............................................SS
+SSSSSSSSSSSSSSSSSS............................................SS
+SSSSSSSSSSSSSSSSSS............................................SS
+SSSSSSSSSSSSSSSSSS............................................SS
+..............................................................SS
+..............................................................SS
+..............................................................SS
+...........................=====..............=====...........SS
+..............................................................SS
+..............................................................SS
+X....Y...R....Y.......................................J..C..E.SS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+
+[spawns]
+entry = 3,19
+
+[exits]
+0,19 = test_level from_barrow
+60,19 = end end barrow
+
+[chests]
+57,19 = jarl_axe, honey, honey
+
+[signs]
+5,19 = Курган ярла Хрёрека. Красная вспышка - этот удар щитом не отразить: катись или отступай!
+14,19 = Отдохни у рунного камня. Дальше - хозяин кургана.
+
+[props]
+urn 3,19
+urn 12,19
+torch 7,19
+torch 16,19
+torch 21,19
+torch 35,19
+torch 43,19
+torch 58,19
+bones 25,19
+bones 38,19
+bones 47,19
+throne 52,19 5

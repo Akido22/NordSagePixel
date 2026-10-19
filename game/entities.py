@@ -248,6 +248,7 @@ class Gate:
 
     def __init__(self, tx, ty, target="end", spawn=None, style="forest"):
         self.style = style
+        self.locked = False
         self.w, self.h = (40, 56) if style == "town" else (24, 32)
         self.x = tx * TILE + 4 - self.w // 2
         self.y = (ty + 1) * TILE - self.h
@@ -257,8 +258,32 @@ class Gate:
     def draw(self):
         if self.style == "town":
             self._draw_town()
+        elif self.style == "barrow":
+            self._draw_barrow()
         else:
             self._draw_forest()
+
+    def _draw_barrow(self):
+        """Каменный проход: столбы и перекрытие с рунами; заперт — завален плитой."""
+        x, y = self.x, self.y
+        t = pyxel.frame_count
+        if self.locked:
+            pyxel.rect(x + 4, y + 8, 16, 24, 5)
+            pyxel.line(x + 4, y + 18, x + 19, y + 21, 1)
+            pyxel.line(x + 9, y + 8, x + 11, y + 31, 1)
+        else:
+            pyxel.rect(x + 4, y + 8, 16, 24, 0)
+            pyxel.dither(0.5 + 0.2 * math.sin(t * 0.05))
+            pyxel.rect(x + 6, y + 10, 12, 22, 12)
+            pyxel.dither(1.0)
+        pyxel.rect(x, y + 6, 4, 26, 5)
+        pyxel.rect(x + 20, y + 6, 4, 26, 5)
+        pyxel.rect(x - 2, y, 28, 7, 6)
+        pyxel.line(x - 2, y + 6, x + 25, y + 6, 1)
+        rune = 10 if not self.locked else 1
+        for i in range(4):
+            pyxel.line(x + 3 + i * 6, y + 2, x + 3 + i * 6, y + 5, rune)
+            pyxel.pset(x + 4 + i * 6, y + 3, rune)
 
     def _draw_forest(self):
         x, y = self.x, self.y
@@ -322,6 +347,8 @@ class Gate:
         pyxel.tri(x + 9, b - 43, x + 20, b - 50, x + 31, b - 43, 4)
 
     def hint(self):
+        if self.locked:
+            return "заперто"
         return "в путь" if self.target != "end" else "войти"
 
 

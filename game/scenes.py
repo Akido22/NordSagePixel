@@ -187,11 +187,12 @@ class PlayScene(Scene):
             gfx.icon(item.icon, 52, 18, item.tint)
             font.text(62, 19, f"x{total} Q", 7)
         # Сообщения.
+        banner_on = 0 < w.title_t < 170
         for i, (text, col, life) in enumerate(w.toasts):
             if life < 20 and (life // 2) % 2:
                 continue
             tw = font.text_width(text)
-            y = 30 + i * 11
+            y = (76 if banner_on else 32) + i * 11
             pyxel.dither(0.7)
             pyxel.rect(SCREEN_W // 2 - tw // 2 - 4, y - 2, tw + 8, 11, 0)
             pyxel.dither(1.0)
@@ -200,9 +201,17 @@ class PlayScene(Scene):
         if w.title_t > 0 and w.title_t < 170:
             if w.title_t > 30 or (w.title_t // 3) % 2:
                 ui.backdrop(36, 34, line=10)
-                font.text_big(SCREEN_W // 2, 41, w.level.title.upper(), 10, scale=2, shadow=8)
-                if w.level.subtitle:
-                    font.text_center(SCREEN_W // 2, 59, w.level.subtitle, 7)
+                title, subtitle = w.banner or (w.level.title, w.level.subtitle)
+                font.text_big(SCREEN_W // 2, 41, title.upper(), 10, scale=2, shadow=8)
+                if subtitle:
+                    font.text_center(SCREEN_W // 2, 59, subtitle, 7)
+        # Полоса здоровья босса.
+        boss = w.boss
+        if boss is not None and boss.awake and not boss.dead and boss.state != "rise":
+            ui.panel(26, SCREEN_H - 24, SCREEN_W - 52, 20, fill=0, border=10, accent=8)
+            font.text_center(SCREEN_W // 2, SCREEN_H - 20, boss.name, 10)
+            col = 8 if boss.phase == 1 or (pyxel.frame_count // 8) % 2 else 9
+            ui.bar(36, SCREEN_H - 11, SCREEN_W - 72, 5, boss.hp, boss.max_hp, col)
         # Разговор.
         npc = w.talk_npc
         if npc is not None:
@@ -541,6 +550,8 @@ class VictoryScene(Scene):
         ui.ornament_band(40, 76, SCREEN_W - 80)
         inv = self.play.world.player.inv
         font.text_center(SCREEN_W // 2, 88, f"Собрано серебра: {inv.silver}", 7)
-        font.text_center(SCREEN_W // 2, 98, "Пробный уровень завершён.", 6)
+        done = "boss:jarl" in self.play.world.state.flags
+        font.text_center(SCREEN_W // 2, 98, "Ярл повержен. Глава I пройдена." if done
+                         else "Пробный уровень завершён.", 6)
         if self.t >= 40:
             self.menu.draw(SCREEN_W // 2, 124)
