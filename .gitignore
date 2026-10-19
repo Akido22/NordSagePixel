@@ -1,0 +1,11 @@
+# Личные сохранения игрока
+saves/
+
+# Python
+__pycache__/
+*.pyc
+
+# Временные файлы
+*.tmp
+.DS_Store
+Thumbs.db
