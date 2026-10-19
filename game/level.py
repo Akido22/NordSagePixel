@@ -15,7 +15,7 @@ SOLID_TILES = {gfx.TILE_GRASS, gfx.TILE_DIRT, gfx.TILE_STONE, gfx.TILE_LOG,
 _TILE_CHARS = {"S": gfx.TILE_STONE, "L": gfx.TILE_LOG, "=": gfx.TILE_PLANK, "^": gfx.TILE_SPIKES,
                "_": gfx.TILE_BOARDWALK, "%": gfx.TILE_FLAGSTONE}
 _DECOR_TILE_CHARS = {"g": gfx.TILE_TUFT, "m": gfx.TILE_MUSHROOM}
-OBJECT_CHARS = set("PRCWDohEXTBIFY")
+OBJECT_CHARS = set("PRCWDKAUohEXTBIFY")
 
 _TEXT_TOKENS = {
     "{UP}": font.ARROW_UP,

@@ -1,11 +1,10 @@
 """Игровые сущности: герой, враги, предметы и объекты уровня."""
 
 import math
-from types import SimpleNamespace
 
 import pyxel
 
-from . import audio, controls, gfx, items, ui
+from . import gfx, items, ui
 from .config import TILE
 from .npcs import NPC_INDEX, NPCS
 
@@ -98,209 +97,14 @@ class Body:
         return level.is_solid(tx, ty) or level.is_platform(tx, ty)
 
 
-# ===================================================================== герой
-FIST = SimpleNamespace(id="fist", icon=None, atk=0, reach=9, swing=14, tint={})
+# ===================================================================== отрисовка гуманоидов
+def draw_humanoid(row, frame, x, y, facing, weapon=None, shield=None, weapon_angle=None,
+                  flash=False, scale=1, shield_front=False):
+    """Рисует гуманоида со щитом и оружием. (x, y) — левый верхний угол хитбокса 8x15.
 
-
-class Player(Body):
-    w = 8
-    h = 15
-    ACCEL = 0.28
-    AIR_ACCEL = 0.18
-    MAX_SPEED = 1.35
-    JUMP_V = -4.1
-    COYOTE = 6
-    JUMP_BUFFER = 7
-    INVULN = 70
-
-    def __init__(self, x, y, inventory):
-        super().__init__(x, y)
-        self.inv = inventory
-        self.hp = inventory.max_hp
-        self.facing = 1
-        self.anim_t = 0
-        self.attack_t = 0
-        self.attack_dur = 1
-        self.hit_ids = set()
-        self.invuln = 0
-        self.coyote = 0
-        self.jump_buf = 0
-        self.drop_t = 0
-        self.dead = False
-        self.safe_pos = (x, y)
-        self.flash = 0
-        self.rebuild_look()
-
-    # ------------------------------------------------------------ внешний вид
-    def rebuild_look(self):
-        armor = self.inv.equipped("armor")
-        helmet = self.inv.equipped("helmet")
-        gfx.build_humanoid(
-            gfx.HERO_ROW,
-            armor_tint=armor.body_tint if armor else {"8": "7", "a": "7"},
-            helmet=helmet is not None,
-            helmet_tint=helmet.helmet_tint if helmet else None,
-        )
-        self.hp = min(self.hp, self.inv.max_hp)
-
-    @property
-    def weapon(self):
-        return self.inv.equipped("weapon") or FIST
-
-    # ------------------------------------------------------------ логика
-    def update(self, world):
-        level = world.level
-        if self.dead:
-            self.apply_gravity()
-            self.vx *= 0.9
-            self.move(level)
-            return
-
-        attacking = self.attack_t > 0
-        direction = int(controls.held("right")) - int(controls.held("left"))
-        if direction and not attacking:
-            self.facing = direction
-        accel = self.ACCEL if self.on_ground else self.AIR_ACCEL
-        top = self.MAX_SPEED * (0.45 if attacking and self.on_ground else 1.0)
-        if direction:
-            self.vx += direction * accel
-            self.vx = max(-top, min(top, self.vx))
-        else:
-            if abs(self.vx) <= accel:
-                self.vx = 0
-            else:
-                self.vx -= accel * (1 if self.vx > 0 else -1)
-
-        # --- прыжок (с «койотом» и буфером нажатия)
-        if controls.pressed("jump"):
-            self.jump_buf = self.JUMP_BUFFER
-        if self.jump_buf > 0 and (self.on_ground or self.coyote > 0):
-            if controls.held("down") and self.on_platform:
-                self.drop_t = 10
-            else:
-                self.vy = self.JUMP_V
-                self.coyote = 0
-                audio.sfx(audio.JUMP)
-                world.dust(self.cx, self.y + self.h)
-            self.jump_buf = 0
-        if self.jump_buf > 0:
-            self.jump_buf -= 1
-        if self.vy < -1.6 and not controls.held("jump"):
-            self.vy = -1.6
-
-        self.apply_gravity()
-        was_on_ground = self.on_ground
-        self.move(level, drop_through=self.drop_t > 0)
-        if self.drop_t > 0:
-            self.drop_t -= 1
-        if self.on_ground:
-            self.coyote = self.COYOTE
-            if not was_on_ground and self.vy == 0:
-                world.dust(self.cx, self.y + self.h, 3)
-        elif self.coyote > 0:
-            self.coyote -= 1
-
-        # --- удар
-        if controls.pressed("attack") and self.attack_t == 0:
-            self.attack_dur = self.weapon.swing
-            self.attack_t = self.attack_dur
-            self.hit_ids.clear()
-            audio.sfx(audio.SWING)
-        if self.attack_t > 0:
-            if self.attack_active():
-                hx, hy, hw, hh = self.attack_box()
-                for enemy in world.enemies:
-                    if id(enemy) not in self.hit_ids and not enemy.dead and rect_overlap(hx, hy, hw, hh, enemy):
-                        self.hit_ids.add(id(enemy))
-                        enemy.take_hit(self.inv.attack, self.facing, world)
-            self.attack_t -= 1
-
-        if self.invuln > 0:
-            self.invuln -= 1
-        if self.flash > 0:
-            self.flash -= 1
-        self.anim_t += 1
-
-        # --- колья и падение за край мира
-        if level.touches_spikes(self.x, self.y, self.w, self.h) or self.y > level.pixel_h:
-            self.hurt_by_hazard(world)
-        elif self.on_ground and not self.on_platform:
-            l_ok = level.is_solid(int(self.x // TILE), int((self.y + self.h) // TILE))
-            r_ok = level.is_solid(int((self.x + self.w - 0.01) // TILE), int((self.y + self.h) // TILE))
-            if l_ok and r_ok:
-                self.safe_pos = (self.x, self.y)
-
-    def attack_progress(self):
-        return 1 - self.attack_t / max(1, self.attack_dur)
-
-    def attack_active(self):
-        return self.attack_t > 0 and 0.2 <= self.attack_progress() <= 0.75
-
-    def attack_box(self):
-        reach = self.weapon.reach
-        hx = self.x + self.w if self.facing > 0 else self.x - reach
-        return hx, self.y - 2, reach, self.h
-
-    def take_damage(self, dmg, from_x, world):
-        if self.invuln > 0 or self.dead:
-            return
-        defense = self.inv.defense
-        actual = max(1, math.ceil(dmg * 6 / (6 + defense)))
-        self.hp -= actual
-        self.invuln = self.INVULN
-        self.flash = 8
-        knock = 1 if self.cx >= from_x else -1
-        self.vx = knock * 2.2
-        self.vy = -2.2
-        world.float_text(self.cx, self.y - 4, f"-{actual}", 8)
-        world.shake(4)
-        if self.hp <= 0:
-            self.hp = 0
-            self.dead = True
-            audio.sfx(audio.DEATH)
-        else:
-            audio.sfx(audio.HURT)
-
-    def hurt_by_hazard(self, world):
-        was_invuln = self.invuln
-        self.invuln = 0
-        self.take_damage(2, self.cx, world)
-        if not self.dead:
-            self.x, self.y = self.safe_pos
-            self.vx = self.vy = 0
-            self.invuln = max(self.invuln, was_invuln)
-
-    def heal(self, amount):
-        before = self.hp
-        self.hp = min(self.inv.max_hp, self.hp + amount)
-        return self.hp - before
-
-    # ------------------------------------------------------------ отрисовка
-    def frame(self):
-        if self.attack_t > 0:
-            return gfx.F_ATTACK if self.on_ground else gfx.F_ATTACK_AIR
-        if not self.on_ground:
-            return gfx.F_JUMP if self.vy < 0 else gfx.F_FALL
-        if abs(self.vx) > 0.2:
-            return gfx.F_RUN[(self.anim_t // 6) % 4]
-        return gfx.F_IDLE[(pyxel.frame_count // 32) % 2]
-
-    def draw(self):
-        if self.invuln > 0 and not self.dead and (self.invuln // 3) % 2:
-            return
-        draw_humanoid(
-            gfx.HERO_ROW, self.frame(), self.x, self.y, self.facing,
-            weapon=self.weapon if self.weapon is not FIST else None,
-            shield=self.inv.equipped("shield"),
-            attack_p=self.attack_progress() if self.attack_t > 0 else None,
-            flash=self.flash > 0,
-        )
-        if self.attack_active() and self.weapon is not FIST:
-            draw_slash(self)
-
-
-def draw_humanoid(row, frame, x, y, facing, weapon=None, shield=None, attack_p=None, flash=False, scale=1):
-    """Рисует гуманоида со щитом и оружием. (x, y) — левый верхний угол хитбокса 8x15."""
+    weapon_angle — угол оружия в руке для удара (None — оружие опущено в стойке).
+    shield_front — щит поднят перед собой (блок), иначе висит за спиной.
+    """
     sx = x - 4 * scale
     sy = y - 5 * scale
 
@@ -310,209 +114,33 @@ def draw_humanoid(row, frame, x, y, facing, weapon=None, shield=None, attack_p=N
     if flash:
         for c in range(1, 16):
             pyxel.pal(c, 15)
-    if shield:
+    if shield and not shield_front:
         gfx.shield(shield, sx + (fx(5) + 0.5) * scale, sy + 13 * scale, scale)
     gfx.humanoid(row, frame, sx, sy, flip=facing < 0, scale=scale)
-    if weapon:
-        if attack_p is not None:
-            hand = gfx.HAND_ATTACK
-            angle = -80 + attack_p * 170
+    if weapon and not shield_front:
+        if weapon_angle is not None:
+            hand, angle = gfx.HAND_ATTACK, weapon_angle
         else:
-            hand = gfx.HAND_IDLE
-            angle = -10
+            hand, angle = gfx.HAND_IDLE, -10
         gfx.weapon(weapon, sx + (fx(hand[0]) + 0.5) * scale, sy + (hand[1] + 0.5) * scale, facing, angle, scale)
+    if shield_front:
+        hand = gfx.HAND_BLOCK
+        cx = sx + (fx(hand[0]) + 0.5) * scale
+        cy = sy + (hand[1] + 0.5) * scale
+        if shield:
+            gfx.shield(shield, cx, cy, scale * 1.4)
+        elif weapon:
+            gfx.weapon(weapon, cx, cy + 2, facing, -60, scale)  # блок оружием
     if flash:
         pyxel.pal()
 
 
-def draw_slash(player):
-    p = player.attack_progress()
-    gx = player.x + player.w / 2 + player.facing * 4
-    gy = player.y + 7
-    r = player.weapon.reach + 2
-    a1 = -80 + p * 170
-    for i in range(10):
-        a = math.radians(a1 - 45 - i * 6)
-        px = gx + math.cos(a) * r * player.facing
-        py = gy + math.sin(a) * r
-        pyxel.pset(px, py, 15 if i < 4 else 7)
-
-
-# ===================================================================== враги
-class Enemy(Body):
-    max_hp = 3
-    contact_dmg = 1
-    knock = 2.0
-    silver = (1, 2)
-
-    def __init__(self, x, y):
-        super().__init__(x, y)
-        self.hp = self.max_hp
-        self.facing = -1
-        self.dead = False
-        self.hurt_t = 0
-        self.flash = 0
-        self.anim_t = 0
-
-    def take_hit(self, dmg, direction, world):
-        self.hp -= dmg
-        self.hurt_t = 14
-        self.flash = 6
-        self.vx = direction * self.knock
-        self.vy = -1.6
-        self.facing = -direction
-        world.float_text(self.cx, self.y - 4, str(dmg), 10)
-        world.sparks(self.cx - direction * 3, self.cy, 6)
-        if self.hp <= 0:
-            self.dead = True
-            audio.sfx(audio.KILL)
-            world.on_enemy_killed(self)
-        else:
-            audio.sfx(audio.HIT)
-
-    def update(self, world):
-        self.anim_t += 1
-        if self.flash > 0:
-            self.flash -= 1
-        if self.hurt_t > 0:
-            self.hurt_t -= 1
-            self.vx *= 0.88
-        else:
-            self.think(world)
-        self.apply_gravity()
-        self.move(world.level)
-        player = world.player
-        if not player.dead and overlap(self, player) and self.hurt_t == 0:
-            player.take_damage(self.contact_dmg, self.cx, world)
-
-    def think(self, world):
-        pass
-
-    def player_near(self, world, dist_x, dist_y=28):
-        p = world.player
-        return not p.dead and abs(p.cx - self.cx) < dist_x and abs(p.cy - self.cy) < dist_y
-
-    def patrol(self, world, speed):
-        if self.hit_wall or (self.on_ground and not self.ground_ahead(world.level, self.facing)):
-            self.facing = -self.facing
-        self.vx = self.facing * speed
-
-
-class Wolf(Enemy):
-    w = 14
-    h = 9
-    max_hp = 4
-    contact_dmg = 2
-    knock = 2.4
-    silver = (1, 3)
-
-    def __init__(self, x, y):
-        super().__init__(x, y)
-        self.lunge_cd = 0
-
-    def think(self, world):
-        if self.lunge_cd > 0:
-            self.lunge_cd -= 1
-        if not self.on_ground:
-            return
-        p = world.player
-        if self.player_near(world, 110):
-            self.facing = 1 if p.cx > self.cx else -1
-            if not self.ground_ahead(world.level, self.facing):
-                self.vx = 0
-            elif abs(p.cx - self.cx) < 40 and self.lunge_cd == 0:
-                self.vx = self.facing * 2.4
-                self.vy = -2.6
-                self.lunge_cd = 80
-            else:
-                self.vx = self.facing * 1.25
-        else:
-            self.patrol(world, 0.5)
-
-    def draw(self):
-        if self.flash:
-            for c in range(1, 16):
-                pyxel.pal(c, 15)
-        moving = abs(self.vx) > 0.1
-        spr = gfx.SPR_WOLF[(self.anim_t // 8) % 2 if moving else 0]
-        if not self.on_ground:
-            spr = gfx.SPR_WOLF[1]
-        gfx.sprite(spr, self.x - 1, self.y - 1, flip=self.facing < 0)
-        pyxel.pal()
-
-
-RUSTY_SWORD = SimpleNamespace(icon="sword", tint={"f": "6", "6": "5", "a": "2"})
-
-
-class Draugr(Enemy):
-    w = 8
-    h = 15
-    max_hp = 8
-    contact_dmg = 1
-    strike_dmg = 4
-    knock = 1.3
-    silver = (3, 5)
-    REACH = 16
-
-    def __init__(self, x, y):
-        super().__init__(x, y)
-        self.state = "walk"
-        self.state_t = 0
-        self.struck = False
-
-    def think(self, world):
-        p = world.player
-        if self.state == "walk":
-            if self.player_near(world, 120, 24):
-                self.facing = 1 if p.cx > self.cx else -1
-                if abs(p.cx - self.cx) < 20:
-                    self._set("windup", 34)
-                    self.vx = 0
-                elif self.ground_ahead(world.level, self.facing):
-                    self.vx = self.facing * 0.55
-                else:
-                    self.vx = 0
-            else:
-                self.patrol(world, 0.3)
-        else:
-            self.vx = 0
-            self.state_t -= 1
-            if self.state == "strike" and not self.struck and not p.dead:
-                hx = self.x + self.w if self.facing > 0 else self.x - self.REACH
-                if rect_overlap(hx, self.y, self.REACH, self.h, p):
-                    p.take_damage(self.strike_dmg, self.cx, world)
-                    self.struck = True
-            if self.state_t <= 0:
-                if self.state == "windup":
-                    self._set("strike", 12)
-                    self.struck = False
-                    audio.sfx(audio.SWING)
-                elif self.state == "strike":
-                    self._set("recover", 40)
-                else:
-                    self._set("walk", 0)
-
-    def _set(self, state, t):
-        self.state = state
-        self.state_t = t
-
-    def take_hit(self, dmg, direction, world):
-        super().take_hit(dmg, direction, world)
-        if self.state == "windup":
-            self._set("recover", 20)  # удар сбивает замах
-
-    def draw(self):
-        if self.state in ("strike",):
-            frame, p = gfx.F_ATTACK, 0.8
-        elif self.state == "windup":
-            frame, p = gfx.F_ATTACK, 0.0
-        else:
-            frame, p = (gfx.F_RUN[(self.anim_t // 10) % 4] if abs(self.vx) > 0.05 else gfx.F_IDLE[0]), None
-        if self.state == "windup" and (self.state_t // 4) % 2:
-            pyxel.pal(15, 8)  # глаза вспыхивают перед ударом
-        draw_humanoid(gfx.DRAUGR_ROW, frame, self.x, self.y, self.facing,
-                      weapon=RUSTY_SWORD, attack_p=p, flash=self.flash > 0)
-        pyxel.pal()
+def draw_stun_stars(cx, y):
+    """Кружащиеся звёздочки над головой оглушённого."""
+    t = pyxel.frame_count
+    for i in range(3):
+        a = t * 0.15 + i * 2.1
+        pyxel.pset(cx + math.cos(a) * 5, y + math.sin(a) * 1.5, 10 if i % 2 else 15)
 
 
 # ===================================================================== предметы на земле

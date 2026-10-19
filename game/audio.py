@@ -17,6 +17,13 @@ DEATH = 9
 KILL = 10
 DENY = 11
 HEAL = 12
+BLOCK = 13
+PARRY = 14
+ROLL = 15
+CHARGED = 16
+HEAVY = 17
+BOW = 18
+GUARD_BREAK = 19
 
 _SFX = {
     JUMP: ("c2e2g2", "p", "4", "s", 4),
@@ -32,6 +39,13 @@ _SFX = {
     KILL: ("c2g1c1", "n", "64", "f", 6),
     DENY: ("c2c2", "s", "3", "n", 6),
     HEAL: ("c3e3g3c4", "t", "4", "n", 6),
+    BLOCK: ("g3c3", "n", "53", "f", 3),
+    PARRY: ("c4g4c4", "p", "654", "nnf", 4),
+    ROLL: ("f2c2a1", "n", "321", "f", 4),
+    CHARGED: ("c3g3", "p", "34", "nv", 6),
+    HEAVY: ("c2g1c1", "n", "765", "f", 5),
+    BOW: ("g2d2", "p", "43", "f", 4),
+    GUARD_BREAK: ("c3a2f2c2", "s", "6", "nnnf", 5),
 }
 
 # Музыка: дорийский лад от ре — напев в духе северных гуслей.

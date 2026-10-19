@@ -82,7 +82,10 @@ class TitleScene(Scene):
 CONTROLS_TEXT = [
     ("Идти", f"{font.ARROW_LEFT} {font.ARROW_RIGHT}  /  A D"),
     ("Прыжок", "ПРОБЕЛ / Z / K"),
-    ("Удар", "X / J"),
+    ("Удар (держи - сильный)", "X / J"),
+    ("Удар сверху в прыжке", f"{font.ARROW_DOWN} + удар"),
+    ("Щит, парирование", "C / L"),
+    ("Перекат", "V / SHIFT"),
     ("Спрыгнуть с доски", f"{font.ARROW_DOWN} + прыжок"),
     ("Говорить, открыть", f"{font.ARROW_UP} / W"),
     ("Подлечиться", "Q / H"),
@@ -105,13 +108,13 @@ class ControlsScene(Scene):
     def draw(self):
         self.back_scene.draw()
         ui.dim(0.7)
-        ui.panel(20, 20, 216, 152)
-        ui.title_plate(SCREEN_W // 2, 13, "УПРАВЛЕНИЕ")
+        ui.panel(12, 14, 232, 170)
+        ui.title_plate(SCREEN_W // 2, 7, "УПРАВЛЕНИЕ")
         for i, (action, keys) in enumerate(CONTROLS_TEXT):
-            y = 38 + i * 13
-            font.text(32, y, action, 7, shadow=0)
-            font.text(132, y, keys, 10, shadow=0)
-        font.text_center(SCREEN_W // 2, 160, "Геймпад тоже работает", 5)
+            y = 28 + i * 11
+            font.text(22, y, action, 7, shadow=0)
+            font.text(150, y, keys, 10, shadow=0)
+        font.text_center(SCREEN_W // 2, 172, "Геймпад тоже работает", 5)
 
 
 # ===================================================================== игра
@@ -167,20 +170,22 @@ class PlayScene(Scene):
         w = self.world
         p = w.player
         inv = p.inv
-        # Здоровье.
-        pyxel.rect(2, 2, 104, 22, 0)
-        pyxel.rectb(2, 2, 104, 22, 2)
-        gfx.icon("heart", 5, 4)
-        ui.bar(15, 5, 60, 6, p.hp, inv.max_hp, 8)
-        font.text(79, 4, f"{p.hp}/{inv.max_hp}", 7)
-        gfx.icon("coin", 5, 14)
-        font.text(15, 15, str(inv.silver), 7)
+        # Здоровье и выносливость.
+        pyxel.rect(2, 2, 104, 27, 0)
+        pyxel.rectb(2, 2, 104, 27, 2)
+        gfx.icon("heart", 5, 3)
+        ui.bar(15, 4, 60, 6, p.hp, inv.max_hp, 8)
+        font.text(79, 3, f"{p.hp}/{inv.max_hp}", 7)
+        stamina_col = 8 if p.stamina_flash and (p.stamina_flash // 3) % 2 else 11
+        ui.bar(15, 11, 60, 4, p.stamina, p.stamina_max, stamina_col, shine=False)
+        gfx.icon("coin", 5, 18)
+        font.text(15, 19, str(inv.silver), 7)
         idx = inv.first_consumable()
         if idx is not None:
             item = inv.item_at(idx)
             total = sum(inv.count_at(i) for i in range(len(inv.bag)) if inv.item_at(i) and inv.item_at(i).heal)
-            gfx.icon(item.icon, 52, 14, item.tint)
-            font.text(62, 15, f"x{total} Q", 7)
+            gfx.icon(item.icon, 52, 18, item.tint)
+            font.text(62, 19, f"x{total} Q", 7)
         # Сообщения.
         for i, (text, col, life) in enumerate(w.toasts):
             if life < 20 and (life // 2) % 2:

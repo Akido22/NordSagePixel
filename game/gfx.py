@@ -146,6 +146,7 @@ _HEAD = ["..1111..", ".1aaaa1.", "1aaaaee1", "1aaaece1", "1aaeeee1", ".1aaaaa1",
 _TORSO = {
     "idle": ["18888a81", "88888a88", "e8888a8e", "12222a21", "18888881"],
     "attack": ["18888a81...", "88888a8888e", "18888a81...", "12222a21...", "18888881..."],
+    "block": ["18888a81..", "88888a888e", "18888a81..", "12222a21..", "18888881.."],
 }
 _LEGS = {
     "stand": [".155551.", ".15..51.", ".17..71.", ".22..22."],
@@ -169,6 +170,7 @@ _FRAMES = [
     (0, "idle", "fall"),    # 7 падение
     (0, "attack", "stand"),  # 8 удар
     (0, "attack", "jump"),  # 9 удар в воздухе
+    (0, "block", "stand"),  # 10 блок щитом
 ]
 F_IDLE = (0, 1)
 F_RUN = (2, 3, 4, 5)
@@ -176,10 +178,12 @@ F_JUMP = 6
 F_FALL = 7
 F_ATTACK = 8
 F_ATTACK_AIR = 9
+F_BLOCK = 10
 
 # Положение кисти (точка хвата оружия) в кадре.
 HAND_IDLE = (11, 13)
 HAND_ATTACK = (14, 12)
+HAND_BLOCK = (13, 12)
 
 HERO_ROW = 0
 DRAUGR_ROW = FRAME_H
@@ -293,11 +297,12 @@ def icon(name, x, y, tint=None, scale=1):
     pyxel.pal()
 
 
-def humanoid(row_y, frame, x, y, flip=False, scale=1):
+def humanoid(row_y, frame, x, y, flip=False, scale=1, rotate=0):
     off_x = (FRAME_W * scale - FRAME_W) / 2
     off_y = (FRAME_H * scale - FRAME_H) / 2
     w = -FRAME_W if flip else FRAME_W
-    pyxel.blt(x + off_x, y + off_y, HERO_BANK, frame * FRAME_W, row_y, w, FRAME_H, 0, scale=scale)
+    pyxel.blt(x + off_x, y + off_y, HERO_BANK, frame * FRAME_W, row_y, w, FRAME_H, 0,
+              rotate=rotate, scale=scale)
 
 
 def weapon(item, gx, gy, facing, angle, scale=1):

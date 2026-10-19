@@ -9,6 +9,8 @@ _BINDINGS = {
     "down": [pyxel.KEY_DOWN, pyxel.KEY_S, pyxel.GAMEPAD1_BUTTON_DPAD_DOWN],
     "jump": [pyxel.KEY_SPACE, pyxel.KEY_Z, pyxel.KEY_K, pyxel.GAMEPAD1_BUTTON_A],
     "attack": [pyxel.KEY_X, pyxel.KEY_J, pyxel.GAMEPAD1_BUTTON_X],
+    "block": [pyxel.KEY_C, pyxel.KEY_L, pyxel.GAMEPAD1_BUTTON_RIGHTSHOULDER],
+    "roll": [pyxel.KEY_V, pyxel.KEY_SHIFT, pyxel.KEY_SEMICOLON, pyxel.GAMEPAD1_BUTTON_B],
     "heal": [pyxel.KEY_Q, pyxel.KEY_H, pyxel.GAMEPAD1_BUTTON_LEFTSHOULDER],
     "inventory": [pyxel.KEY_I, pyxel.KEY_TAB, pyxel.GAMEPAD1_BUTTON_BACK],
     "pause": [pyxel.KEY_ESCAPE, pyxel.KEY_P, pyxel.GAMEPAD1_BUTTON_START],

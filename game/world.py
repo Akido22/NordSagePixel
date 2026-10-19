@@ -7,8 +7,9 @@ import pyxel
 
 from . import audio, controls, font, items, save
 from .config import LEVELS_DIR, SCREEN_W, TILE
-from .entities import (Chest, Decor, Draugr, EdgeExit, Gate, Npc, Pickup, Player, Runestone, Sign,
-                       Stela, Wolf, overlap)
+from .enemies import Archer, Draugr, Dummy, ShieldDraugr, Wolf
+from .entities import Chest, Decor, EdgeExit, Gate, Npc, Pickup, Runestone, Sign, Stela, overlap
+from .player import Player
 from .level import Level
 from .props import Prop
 from .state import GameState
@@ -27,6 +28,8 @@ class World:
         self.texts = []
         self.toasts = []
         self.shake_t = 0
+        self.hitstop = 0  # «стоп-кадр» при сильных попаданиях
+        self.projectiles = []
         self.cam_x = 0.0
         self.finished = False
         self.exit_to = None  # (локация, точка появления) — запрошенный переход
@@ -52,6 +55,12 @@ class World:
                 self.enemies.append(Wolf(px - 3, py - Wolf.h))
             elif ch == "D":
                 self.enemies.append(Draugr(px, py - Draugr.h))
+            elif ch == "K":
+                self.enemies.append(ShieldDraugr(px, py - ShieldDraugr.h))
+            elif ch == "A":
+                self.enemies.append(Archer(px, py - Archer.h))
+            elif ch == "U":
+                self.enemies.append(Dummy(px - 1, py - Dummy.h))
             elif ch in "oh":
                 uid = f"{ch}{tx},{ty}"
                 if self._key(uid) not in st.collected:
@@ -123,6 +132,9 @@ class World:
 
     def shake(self, amount):
         self.shake_t = max(self.shake_t, amount)
+
+    def freeze(self, frames):
+        self.hitstop = max(self.hitstop, frames)
 
     def dust(self, x, y, n=5):
         for _ in range(n):
@@ -232,11 +244,18 @@ class World:
 
     # ------------------------------------------------------------ цикл
     def update(self):
+        self.player.poll_input()
+        if self.hitstop > 0:
+            self.hitstop -= 1
+            return
         p = self.player
         p.update(self)
         for e in self.enemies:
             e.update(self)
         self.enemies = [e for e in self.enemies if not e.dead]
+        for arrow in self.projectiles:
+            arrow.update(self)
+        self.projectiles = [a for a in self.projectiles if not a.dead]
         for pk in self.pickups:
             pk.update(self)
         self.pickups = [pk for pk in self.pickups if not pk.taken]
@@ -317,6 +336,8 @@ class World:
             if -24 < e.x - cam < SCREEN_W + 24:
                 e.draw()
         self.player.draw()
+        for arrow in self.projectiles:
+            arrow.draw()
         for x, y, _, _, _, col, _ in self.particles:
             pyxel.pset(x, y, col)
         for x, y, text, col, _ in self.texts:

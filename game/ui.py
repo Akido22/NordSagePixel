@@ -53,11 +53,11 @@ def title_plate(cx, y, text, col=10):
     font.text_center(cx, y + 4, text, col, shadow=1)
 
 
-def bar(x, y, w, h, value, max_value, col, back=1, border=2):
+def bar(x, y, w, h, value, max_value, col, back=1, border=2, shine=True):
     pyxel.rect(x, y, w, h, back)
     fill = int((w - 2) * max(0, value) / max(1, max_value))
     pyxel.rect(x + 1, y + 1, fill, h - 2, col)
-    if fill > 2:
+    if shine and fill > 2:
         pyxel.line(x + 1, y + 1, x + fill, y + 1, 15 if col != 15 else 7)
     pyxel.rectb(x, y, w, h, border)
 

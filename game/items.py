@@ -25,9 +25,10 @@ class Item:
     hp: int = 0
     heal: int = 0
     tint: dict = field(default_factory=dict)
-    # Оружие: дальность удара (пикс.) и длительность замаха (кадры).
+    # Оружие: дальность удара (пикс.), длительность замаха (кадры), расход выносливости.
     reach: int = 0
     swing: int = 0
+    stamina: int = 0
     # Щит: (обод, поле, умбон).
     shield_colors: tuple = (2, 4, 6)
     # Доспех: перекраска туловища героя; шлем: перекраска шлема.
@@ -51,6 +52,8 @@ class Item:
         if self.reach:
             speed = "быстрый" if self.swing <= 16 else "средний" if self.swing <= 22 else "медленный"
             lines.append(f"Удар: {speed}")
+        if self.stamina:
+            lines.append(f"Силы: {self.stamina}")
         return lines
 
 
@@ -59,16 +62,16 @@ ITEMS = {
     for it in [
         Item("knife", "Охотничий нож", "weapon", "knife",
              "Простой нож из болотного железа.",
-             atk=1, reach=12, swing=14),
+             atk=1, reach=12, swing=14, stamina=10),
         Item("sword", "Варяжский меч", "weapon", "sword",
              "Клинок, выменянный у заморских купцов.",
-             atk=3, reach=16, swing=18),
+             atk=3, reach=16, swing=18, stamina=15),
         Item("axe", "Секира викинга", "weapon", "axe",
              "Тяжёлый топор северян. Рубит и щит, и шлем.",
-             atk=5, reach=15, swing=26),
+             atk=5, reach=15, swing=26, stamina=24),
         Item("spear", "Рогатина", "weapon", "spear",
              "Копьё с перекладиной, с ним ходят на медведя.",
-             atk=3, reach=24, swing=22),
+             atk=3, reach=24, swing=22, stamina=18),
         Item("shield_round", "Круглый щит", "shield", "shield",
              "Липовые доски, обтянутые кожей.",
              defense=1),
