@@ -14,6 +14,7 @@ class GameState:
         self.chests = {}  # "локация:uid" -> оставшаяся добыча
         self.save_point = None  # "локация:uid" последнего камня/стелы
         self.flags = set()  # например "boss:jarl" — ярл побеждён
+        self.lost_silver = None  # {"level", "x", "y", "amount"} — серебро на месте гибели
         self.level = START_LEVEL
         self.spawn = "start"
         self.pos = None  # точное положение героя (из сохранения)
@@ -32,6 +33,7 @@ class GameState:
             "chests": self.chests,
             "save_point": self.save_point,
             "flags": sorted(self.flags),
+            "lost_silver": self.lost_silver,
         }
 
     @classmethod
@@ -43,6 +45,7 @@ class GameState:
         st.chests = {k: [i for i in v if i in items.ITEMS] for k, v in data.get("chests", {}).items()}
         st.save_point = data.get("save_point")
         st.flags = set(data.get("flags", []))
+        st.lost_silver = data.get("lost_silver")
         st.level = data.get("level", START_LEVEL)
         st.pos = tuple(data["pos"]) if data.get("pos") else None
         st.spawn = None

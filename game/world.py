@@ -9,7 +9,8 @@ from . import audio, controls, font, items, save
 from .config import LEVELS_DIR, SCREEN_W, TILE
 from .bosses import JarlBoss
 from .enemies import Archer, Draugr, Dummy, ShieldDraugr, Wolf
-from .entities import Chest, Decor, EdgeExit, Gate, Npc, Pickup, Runestone, Sign, Stela, overlap
+from .entities import (Chest, Decor, EdgeExit, Gate, LostSilver, Npc, Pickup, Runestone, Sign, Stela,
+                       overlap)
 from .player import Player
 from .level import Level
 from .props import Prop
@@ -37,6 +38,11 @@ class World:
         self.near = None
         self.talk_npc = None
         self.banner = None  # (заголовок, подзаголовок) вместо названия локации
+        self.ui_request = None  # ("rest", точка) или ("npc", житель) — открыть окно поверх игры
+        self.lost_pile = None
+        lost = st.lost_silver
+        if lost and lost.get("level") == self.level.name and lost.get("amount", 0) > 0:
+            self.lost_pile = LostSilver(lost["x"], lost["y"], lost["amount"])
         self.pending_enemies = []
 
         # --- босс и арена
@@ -220,6 +226,7 @@ class World:
             self.chests.append(self.hidden_chest)
             self.sparks(self.hidden_chest.x + 8, self.hidden_chest.y + 4, 16)
             self.hidden_chest = None
+        self.gain_xp(boss.xp, boss.cx, boss.y)
         for _ in range(boss.silver[0]):
             coin = Pickup(boss.cx - 4, boss.y + 10, "coin")
             coin.vx = random.uniform(-1.6, 1.6)
@@ -230,9 +237,37 @@ class World:
         self.show_banner("ЯРЛ ПОВЕРЖЕН", "Курган открыт")
         self.save_game()
 
+    def gain_xp(self, amount, x, y):
+        inv = self.player.inv
+        levels = inv.add_xp(amount)
+        self.float_text(x, y - 10, f"+{amount} опыта", 11)
+        if levels:
+            self.toast(f"Новый уровень: {inv.level}! Поклонись Стеле или камню", 10)
+            audio.sfx(audio.SAVE)
+
+    def on_player_died(self):
+        """Серебро остаётся на месте гибели; в сохранении — только оно и пропадает."""
+        p = self.player
+        amount = p.inv.silver
+        x, y = p.safe_pos
+        lost = {"level": self.level.name, "x": x, "y": y, "amount": amount} if amount > 0 else None
+        self.state.lost_silver = lost
+        data = save.load()
+        if data:
+            data["inventory"]["silver"] = 0
+            data["lost_silver"] = lost
+            save.write(data)
+
     def on_enemy_killed(self, enemy):
         self.smoke(enemy.cx, enemy.cy)
         self.shake(2)
+        if enemy.xp:
+            self.gain_xp(enemy.xp, enemy.cx, enemy.y)
+        if random.random() < enemy.ore_chance:
+            ore = Pickup(enemy.cx - 4, enemy.y, "ore")
+            ore.vy = -2.2
+            ore.vx = random.uniform(-0.8, 0.8)
+            self.pickups.append(ore)
         for _ in range(random.randint(*enemy.silver)):
             coin = Pickup(enemy.cx - 4, enemy.y, "coin")
             coin.vx = random.uniform(-1.2, 1.2)
@@ -301,16 +336,23 @@ class World:
             p.hp = p.inv.max_hp
             self.float_text(p.cx, p.y - 4, "РУНЫ" if isinstance(obj, Runestone) else "ПРЕДКИ", 10)
             self.save_game()
+            self.ui_request = ("rest", obj)
         elif isinstance(obj, Npc):
-            obj.talk()
-            self.talk_npc = obj if obj.talking else None
-            audio.sfx(audio.MOVE)
+            if obj.data.shop and not obj.talking:
+                self.ui_request = ("npc", obj)  # меню: говорить / торговать
+            else:
+                self.start_talk(obj)
         elif isinstance(obj, Gate):
             if obj.locked:
                 self.toast("Заперто. Хозяин кургана ещё не повержен", 8)
                 audio.sfx(audio.DENY)
             else:
                 self._leave(obj.target, obj.spawn)
+
+    def start_talk(self, npc):
+        npc.talk()
+        self.talk_npc = npc if npc.talking else None
+        audio.sfx(audio.MOVE)
 
     def _leave(self, target, spawn):
         if target == "end":
@@ -364,6 +406,14 @@ class World:
             for ex in self.edge_exits:
                 if overlap(p, ex) and self.exit_to is None:
                     self._leave(ex.target, ex.spawn)
+            pile = self.lost_pile
+            if pile is not None and overlap(p, pile):
+                p.inv.silver += pile.amount
+                self.toast(f"Серебро возвращено: {pile.amount}", 10)
+                audio.sfx(audio.COIN)
+                self.sparks(pile.x + 5, pile.y, 12)
+                self.state.lost_silver = None
+                self.lost_pile = None
 
         for part in self.particles:
             part[0] += part[2]
@@ -419,6 +469,8 @@ class World:
         self.level.draw_tiles(cam)
         for obj in self.gates + self.edge_exits + self.signs + self.save_points + self.chests:
             obj.draw()
+        if self.lost_pile is not None:
+            self.lost_pile.draw()
         if self.door_drop > 0:
             self._draw_arena_door()
         for d in self.decor:

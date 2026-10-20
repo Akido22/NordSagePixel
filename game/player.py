@@ -11,7 +11,6 @@ from .entities import Body, draw_humanoid, draw_stun_stars, rect_overlap
 
 FIST = SimpleNamespace(id="fist", icon=None, atk=0, reach=9, swing=14, stamina=8, tint={})
 
-STAMINA_MAX = 100
 STAMINA_REGEN = 1.1  # в кадр
 STAMINA_DELAY = 35  # пауза перед восстановлением после траты
 EXHAUST_DELAY = 70  # пауза, если силы кончились совсем
@@ -55,7 +54,7 @@ class Player(Body):
         self.hit_ids = set()
         self.block_t = 0
         self.block_cd = 0
-        self.stamina = STAMINA_MAX
+        self.stamina = inventory.max_stamina
         self.stamina_wait = 0
         self.stamina_flash = 0
         self.invuln = 0
@@ -87,7 +86,7 @@ class Player(Body):
 
     @property
     def stamina_max(self):
-        return STAMINA_MAX
+        return self.inv.max_stamina
 
     # ------------------------------------------------------------ выносливость
     def spend(self, amount):

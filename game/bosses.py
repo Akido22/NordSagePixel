@@ -87,6 +87,7 @@ class JarlBoss(Enemy):
     contact_dmg = 2
     knock = 0
     silver = (12, 12)
+    xp = 100
     CHAIN_DMG = 4
     SLAM_DMG = 5
     SWEEP_DMG = 5

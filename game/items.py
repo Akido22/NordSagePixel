@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 
 # Слоты экипировки в порядке отображения.
 SLOTS = ["weapon", "shield", "helmet", "armor", "amulet"]
+SELL_RATE = 0.4
+
 SLOT_NAMES = {
     "weapon": "Оружие",
     "shield": "Щит",
@@ -11,13 +13,14 @@ SLOT_NAMES = {
     "armor": "Доспех",
     "amulet": "Оберег",
 }
+KIND_NAMES = dict(SLOT_NAMES, consumable="Припасы", material="Для кузни")
 
 
 @dataclass(frozen=True)
 class Item:
     id: str
     name: str
-    kind: str  # слот из SLOTS или "consumable"
+    kind: str  # слот из SLOTS, "consumable" (припасы) или "material" (для кузни)
     icon: str
     desc: str
     atk: int = 0
@@ -34,10 +37,15 @@ class Item:
     # Доспех: перекраска туловища героя; шлем: перекраска шлема.
     body_tint: dict = field(default_factory=dict)
     helmet_tint: dict = field(default_factory=dict)
+    price: int = 0  # цена в лавке; продать можно за SELL_RATE от неё
 
     @property
     def stackable(self):
-        return self.kind == "consumable"
+        return self.kind in ("consumable", "material")
+
+    @property
+    def sell_price(self):
+        return max(1, int(self.price * SELL_RATE))
 
     def stat_lines(self):
         lines = []
@@ -62,52 +70,55 @@ ITEMS = {
     for it in [
         Item("knife", "Охотничий нож", "weapon", "knife",
              "Простой нож из болотного железа.",
-             atk=1, reach=12, swing=14, stamina=10),
+             atk=1, reach=12, swing=14, stamina=10, price=8),
         Item("sword", "Варяжский меч", "weapon", "sword",
              "Клинок, выменянный у заморских купцов.",
-             atk=3, reach=16, swing=18, stamina=15),
+             atk=3, reach=16, swing=18, stamina=15, price=50),
         Item("axe", "Секира викинга", "weapon", "axe",
              "Тяжёлый топор северян. Рубит и щит, и шлем.",
-             atk=5, reach=15, swing=26, stamina=24),
+             atk=5, reach=15, swing=26, stamina=24, price=70),
         Item("spear", "Рогатина", "weapon", "spear",
              "Копьё с перекладиной, с ним ходят на медведя.",
-             atk=3, reach=24, swing=22, stamina=18),
+             atk=3, reach=24, swing=22, stamina=18, price=45),
         Item("jarl_axe", "Секира ярла", "weapon", "axe",
              "Секира Хрёрека. Холодна, как курганный камень.",
-             atk=7, reach=18, swing=24, stamina=22, tint={"6": "5", "f": "6"}),
+             atk=7, reach=18, swing=24, stamina=22, tint={"6": "5", "f": "6"}, price=150),
         Item("shield_round", "Круглый щит", "shield", "shield",
              "Липовые доски, обтянутые кожей.",
-             defense=1),
+             defense=1, price=25),
         Item("shield_red", "Червлёный щит", "shield", "shield",
              "Алый щит дружинника, окованный медью.",
-             defense=2, tint={"4": "8", "2": "a", "6": "a"}, shield_colors=(10, 8, 10)),
+             defense=2, tint={"4": "8", "2": "a", "6": "a"}, shield_colors=(10, 8, 10), price=60),
         Item("cap", "Меховая шапка", "helmet", "cap",
              "Тёплая шапка с лисьей опушкой.",
-             defense=1, helmet_tint={"6": "4", "a": "7", "1": "2"}),
+             defense=1, helmet_tint={"6": "4", "a": "7", "1": "2"}, price=20),
         Item("shishak", "Шлем-шишак", "helmet", "helmet",
              "Островерхий шлем с наносником.",
-             defense=2),
+             defense=2, price=55),
         Item("shirt", "Вышитая рубаха", "armor", "shirt",
              "Мать вышила обережный узор на вороте.",
-             defense=0, hp=1, body_tint={"8": "7", "a": "8"}),
+             defense=0, hp=1, body_tint={"8": "7", "a": "8"}, price=10),
         Item("leather", "Кожаный доспех", "armor", "shirt",
              "Вываренная кожа в несколько слоёв.",
-             defense=1, tint={"7": "4", "8": "2"}, body_tint={"8": "4", "a": "2"}),
+             defense=1, tint={"7": "4", "8": "2"}, body_tint={"8": "4", "a": "2"}, price=40),
         Item("mail", "Кольчуга", "armor", "shirt",
              "Тысячи стальных колец. Тяжела, но надёжна.",
-             defense=3, tint={"7": "6", "8": "5"}, body_tint={"8": "6", "a": "5", "e": "6"}),
+             defense=3, tint={"7": "6", "8": "5"}, body_tint={"8": "6", "a": "5", "e": "6"}, price=90),
         Item("hammer", "Оберег-молот", "amulet", "hammer",
              "Знак громовержца. Рука бьёт крепче.",
-             atk=1),
+             atk=1, price=45),
         Item("lunnitsa", "Лунница", "amulet", "lunnitsa",
              "Серебряный полумесяц, хранит от хвори.",
-             hp=3),
+             hp=3, price=50),
         Item("honey", "Горшок мёда", "consumable", "honey",
              "Густой липовый мёд. Восстанавливает силы.",
-             heal=5),
+             heal=5, price=12),
         Item("bread", "Каравай", "consumable", "bread",
              "Румяный хлеб в дорогу.",
-             heal=2),
+             heal=2, price=5),
+        Item("ore", "Железная крица", "material", "ore",
+             "Ком болотного железа. Кузнец перекуёт его в доброе оружие.",
+             price=20),
     ]
 }
 

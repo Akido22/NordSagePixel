@@ -5,8 +5,9 @@ import pyxel
 from . import audio, controls, font, gfx, items, save, ui
 from .config import GAME_TITLE, SCREEN_H, SCREEN_W
 from .entities import Sign, draw_humanoid
-from .inventory import BAG_COLS, BAG_ROWS, BAG_SIZE
+from .inventory import BAG_COLS, BAG_ROWS, BAG_SIZE, xp_needed
 from .level import Background
+from .menus import NpcMenuScene, RestScene
 from .state import GameState
 from .world import World
 
@@ -87,7 +88,7 @@ CONTROLS_TEXT = [
     ("Щит, парирование", "C / L"),
     ("Перекат", "V / SHIFT"),
     ("Спрыгнуть с доски", f"{font.ARROW_DOWN} + прыжок"),
-    ("Говорить, открыть", f"{font.ARROW_UP} / W"),
+    ("Говорить, торговать, открыть", f"{font.ARROW_UP} / W"),
     ("Подлечиться", "Q / H"),
     ("Сума и снаряжение", "I / TAB"),
     ("Пауза", "ESC / P"),
@@ -151,7 +152,15 @@ class PlayScene(Scene):
             self.app.set_scene(InventoryScene(self.app, self))
             return
         w.update()
+        if w.ui_request is not None:
+            kind, target = w.ui_request
+            w.ui_request = None
+            scene = RestScene if kind == "rest" else NpcMenuScene
+            self.app.set_scene(scene(self.app, self, target))
+            return
         if w.player.dead:
+            if self.dead_t == 0:
+                w.on_player_died()
             self.dead_t += 1
             if self.dead_t > 90:
                 self.app.set_scene(DeathScene(self.app, self))
@@ -171,8 +180,12 @@ class PlayScene(Scene):
         p = w.player
         inv = p.inv
         # Здоровье и выносливость.
-        pyxel.rect(2, 2, 104, 27, 0)
-        pyxel.rectb(2, 2, 104, 27, 2)
+        pyxel.rect(2, 2, 122, 28, 0)
+        pyxel.rectb(2, 2, 122, 28, 2)
+        need = xp_needed(inv.level)
+        pyxel.line(3, 28, 3 + int(118 * inv.xp / need), 28, 10)
+        lvl_col = 10 if inv.points and (pyxel.frame_count // 15) % 2 else 6
+        font.text(96, 19, f"УР.{inv.level}" + ("+" if inv.points else ""), lvl_col)
         gfx.icon("heart", 5, 3)
         ui.bar(15, 4, 60, 6, p.hp, inv.max_hp, 8)
         font.text(79, 3, f"{p.hp}/{inv.max_hp}", 7)
@@ -386,6 +399,9 @@ class InventoryScene(Scene):
                 item = self.inv.item_at(key)
                 if item is None:
                     audio.sfx(audio.DENY)
+                elif item.kind == "material":
+                    self._say("Это для кузни: отнеси Добрыне")
+                    audio.sfx(audio.DENY)
                 elif item.kind == "consumable":
                     if self.player.hp >= self.inv.max_hp:
                         self._say("Ты и так полон сил")
@@ -454,10 +470,12 @@ class InventoryScene(Scene):
         dy = 137
         pyxel.line(10, dy - 4, SCREEN_W - 11, dy - 4, 2)
         if item:
-            font.text(12, dy, item.name, 10, shadow=1)
-            label = items.SLOT_NAMES.get(item.kind, "Припасы")
+            font.text(12, dy, inv.item_name(item), 10, shadow=1)
+            label = items.KIND_NAMES.get(item.kind, "")
             font.text(SCREEN_W - 12 - font.text_width(label), dy, label, 5)
             stats = "   ".join(item.stat_lines())
+            if item.kind == "weapon" and inv.upgrade_level(item.id):
+                stats += f"   Заточка +{inv.upgrade_level(item.id)}"
             font.text(12, dy + 10, stats, 11)
             for i, line in enumerate(font.wrap(item.desc, SCREEN_W - 24)[:2]):
                 font.text(12, dy + 20 + i * font.LINE_H, line, 7)
@@ -477,6 +495,8 @@ class InventoryScene(Scene):
                 action = "снять"
             elif item and item.kind == "consumable":
                 action = "съесть"
+            elif item and item.kind == "material":
+                action = "-"
             else:
                 action = "надеть"
             font.text_center(SCREEN_W // 2, hy, f"Z - {action}   R - выбросить   I - закрыть", 5)

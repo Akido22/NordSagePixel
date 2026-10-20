@@ -182,6 +182,28 @@ class Pickup(Body):
 
 
 # ===================================================================== объекты уровня
+class LostSilver:
+    """Серебро, оброненное героем при гибели. Подбери — вернёшь."""
+
+    w, h = 10, 8
+
+    def __init__(self, x, y, amount):
+        self.x = x - 1
+        self.y = y + 7  # у ног героя
+        self.amount = amount
+
+    def draw(self):
+        t = pyxel.frame_count
+        x, b = self.x, self.y + self.h
+        pyxel.dither(0.25 + 0.1 * math.sin(t * 0.1))
+        pyxel.circ(x + 5, b - 4, 9, 6)
+        pyxel.dither(1.0)
+        for i, (dx, dy) in enumerate(((1, -2), (4, -3), (7, -2), (3, -5), (6, -5))):
+            pyxel.rect(x + dx, b + dy, 3, 2, 15 if (t // 8 + i) % 4 else 6)
+        if (t // 6) % 5 == 0:
+            pyxel.pset(x + 5, b - 9, 15)
+
+
 class Chest:
     w, h = 16, 12
 

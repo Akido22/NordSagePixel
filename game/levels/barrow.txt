@@ -47,7 +47,7 @@ entry = 3,19
 60,19 = end end barrow
 
 [chests]
-57,19 = jarl_axe, honey, honey
+57,19 = jarl_axe, honey, honey, ore, ore
 
 [signs]
 5,19 = Курган ярла Хрёрека. Красная вспышка - этот удар щитом не отразить: катись или отступай!

@@ -24,6 +24,8 @@ class Enemy(Body):
     contact_dmg = 1
     knock = 2.0
     silver = (1, 2)
+    xp = 3
+    ore_chance = 0.0  # шанс выронить железную крицу
     stun_time = 80
 
     def __init__(self, x, y):
@@ -144,6 +146,7 @@ class Wolf(Enemy):
     lunge_dmg = 3
     knock = 2.4
     silver = (1, 3)
+    xp = 5
     CROUCH = 20
 
     def __init__(self, x, y):
@@ -223,6 +226,8 @@ class Draugr(Enemy):
     strike_dmg = 4
     knock = 1.3
     silver = (3, 5)
+    xp = 10
+    ore_chance = 0.35
     stun_time = 90
     REACH = 16
     WINDUP = 34
@@ -302,6 +307,7 @@ class ShieldDraugr(Draugr):
 
     max_hp = 10
     silver = (4, 6)
+    xp = 14
     GUARD_MAX = 3
 
     def __init__(self, x, y):
@@ -346,6 +352,8 @@ class Archer(Enemy):
     contact_dmg = 1
     knock = 2.2
     silver = (2, 4)
+    xp = 8
+    ore_chance = 0.25
     stun_time = 90
     AIM = 44
 
