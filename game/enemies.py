@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pyxel
 
-from . import audio, gfx
+from . import audio, sprites
 from .config import TILE
 from .entities import Body, draw_humanoid, draw_stun_stars, overlap, rect_overlap
 
@@ -139,8 +139,8 @@ class Enemy(Body):
 
 # ===================================================================== волк
 class Wolf(Enemy):
-    w = 14
-    h = 9
+    w = 18
+    h = 11
     max_hp = 4
     contact_dmg = 1
     lunge_dmg = 3
@@ -198,18 +198,16 @@ class Wolf(Enemy):
             self.patrol(world, 0.5)
 
     def draw(self):
-        if self.flash:
-            for c in range(1, 16):
-                pyxel.pal(c, 15)
-        elif self.crouch_t and (self.crouch_t // 3) % 2:
-            pyxel.pal(10, 8)  # глаза вспыхивают красным
-        moving = abs(self.vx) > 0.1
-        spr = gfx.SPR_WOLF[(self.anim_t // 8) % 2 if moving else 0]
-        if not self.on_ground:
-            spr = gfx.SPR_WOLF[1]
-        dy = 2 if self.crouch_t else 0
-        gfx.sprite(spr, self.x - 1, self.y - 1 + dy, flip=self.facing < 0)
-        pyxel.pal()
+        eyes = {"a": "8"} if self.crouch_t and (self.crouch_t // 3) % 2 else None  # глаза вспыхивают
+        if self.crouch_t:
+            name, i = "crouch", 0
+        elif not self.on_ground:
+            name, i = "leap", 0
+        elif abs(self.vx) > 0.1:
+            name, i = "run", self.anim_t // 6
+        else:
+            name, i = "idle", 0
+        sprites.draw_wolf(name, i, self.cx, self.y + self.h + 1, self.facing, self.flash > 0, eyes)
         self.draw_status()
 
 
@@ -219,8 +217,8 @@ RUSTY_SHIELD = SimpleNamespace(shield_colors=(1, 5, 6))
 
 
 class Draugr(Enemy):
-    w = 8
-    h = 15
+    w = 10
+    h = 22
     max_hp = 8
     contact_dmg = 1
     strike_dmg = 4
@@ -229,7 +227,7 @@ class Draugr(Enemy):
     xp = 10
     ore_chance = 0.35
     stun_time = 90
-    REACH = 16
+    REACH = 18
     WINDUP = 34
 
     def __init__(self, x, y):
@@ -279,22 +277,25 @@ class Draugr(Enemy):
                 self._set("walk", 0)
 
     def pose(self):
-        """(кадр, угол оружия) для текущего состояния."""
+        """Кадр для текущего состояния."""
+        if self.stun_t > 0 or self.hurt_t > 0:
+            return sprites.anim("hurt")
         if self.state == "strike":
-            return gfx.F_ATTACK, 56
+            return sprites.anim("attack", 2)
         if self.state == "windup":
-            return gfx.F_ATTACK, -95
-        moving = abs(self.vx) > 0.05
-        return (gfx.F_RUN[(self.anim_t // 10) % 4] if moving else gfx.F_IDLE[0]), None
+            return sprites.anim("attack", 0)
+        if self.state == "recover":
+            return sprites.anim("attack", 3)
+        if abs(self.vx) > 0.05:
+            return sprites.anim("run", self.anim_t // 7)
+        return sprites.anim("idle", self.anim_t // 18)
 
-    def draw(self, shield=None, shield_front=False):
-        frame, angle = self.pose()
-        if self.state == "windup" and (self.state_t // 4) % 2:
-            pyxel.pal(15, 8)  # глаза вспыхивают перед ударом
-        draw_humanoid(gfx.DRAUGR_ROW, frame, self.x, self.y, self.facing, weapon=RUSTY_SWORD,
-                      shield=shield, shield_front=shield_front, weapon_angle=angle,
-                      flash=self.flash > 0)
-        pyxel.pal()
+    def draw(self, shield=None, shield_front=False, frame=None):
+        frame = self.pose() if frame is None else frame
+        eyes = {"c": "8"} if self.state == "windup" and (self.state_t // 4) % 2 else None  # вспышка глаз
+        draw_humanoid(sprites.DRAUGR_LOOK, frame, self.cx, self.y + self.h, self.facing,
+                      weapon=RUSTY_SWORD, shield=shield, shield_front=shield_front,
+                      flash=self.flash > 0, extra=eyes)
         self.draw_status()
 
 
@@ -340,14 +341,16 @@ class ShieldDraugr(Draugr):
         super().think(world)
 
     def draw(self):
-        super().draw(shield=RUSTY_SHIELD, shield_front=self.guarding())
+        guarding = self.guarding()
+        frame = sprites.anim("block") if guarding and abs(self.vx) < 0.05 else None
+        super().draw(shield=RUSTY_SHIELD, shield_front=guarding, frame=frame)
 
 
 class Archer(Enemy):
     """Драугр-лучник: держит дистанцию и стреляет, предупреждая натянутой тетивой."""
 
-    w = 8
-    h = 15
+    w = 10
+    h = 22
     max_hp = 4
     contact_dmg = 1
     knock = 2.2
@@ -377,7 +380,7 @@ class Archer(Enemy):
             self.facing = _sign(p.cx - self.cx)
             self.state_t -= 1
             if self.state_t <= 0:
-                world.projectiles.append(Arrow(self.cx + self.facing * 6, self.y + 7, self.facing * 2.8))
+                world.projectiles.append(Arrow(self.cx + self.facing * 8, self.y + 9, self.facing * 2.8))
                 audio.sfx(audio.BOW)
                 self.state = "walk"
                 self.cooldown = 50
@@ -398,29 +401,30 @@ class Archer(Enemy):
                 self.state_t = self.AIM
 
     def draw(self):
-        pyxel.pal(2, 3)  # зелёный истлевший плащ
-        if self.flash:
-            for c in range(1, 16):
-                pyxel.pal(c, 15)
         aiming = self.state == "aim"
-        frame = gfx.F_BLOCK if aiming else (gfx.F_RUN[(self.anim_t // 10) % 4] if abs(self.vx) > 0.05
-                                            else gfx.F_IDLE[0])
-        draw_humanoid(gfx.DRAUGR_ROW, frame, self.x, self.y, self.facing)
-        pyxel.pal()
+        if self.stun_t > 0 or self.hurt_t > 0:
+            frame = sprites.anim("hurt")
+        elif aiming:
+            frame = sprites.anim("cast", 0)
+        elif abs(self.vx) > 0.05:
+            frame = sprites.anim("run", self.anim_t // 7)
+        else:
+            frame = sprites.anim("idle", self.anim_t // 18)
+        bottom = self.y + self.h
+        draw_humanoid(sprites.ARCHER_LOOK, frame, self.cx, bottom, self.facing, flash=self.flash > 0)
         # Лук в вытянутой руке.
-        hx = self.cx + self.facing * 7
-        hy = self.y + 7
+        hx, hy = sprites.anchor(frame, "hand", self.cx, bottom, self.facing)
         f = self.facing
-        pyxel.line(hx, hy - 5, hx + f * 2, hy - 2, 4)
-        pyxel.line(hx + f * 2, hy - 2, hx + f * 2, hy + 2, 4)
-        pyxel.line(hx + f * 2, hy + 2, hx, hy + 5, 4)
+        pyxel.line(hx, hy - 6, hx + f * 2, hy - 3, 4)
+        pyxel.line(hx + f * 2, hy - 3, hx + f * 2, hy + 3, 4)
+        pyxel.line(hx + f * 2, hy + 3, hx, hy + 6, 4)
         pull = 3 if aiming else 0
-        pyxel.line(hx, hy - 5, hx - f * pull, hy, 7)
-        pyxel.line(hx - f * pull, hy, hx, hy + 5, 7)
+        pyxel.line(hx, hy - 6, hx - f * pull, hy, 7)
+        pyxel.line(hx - f * pull, hy, hx, hy + 6, 7)
         if aiming:
-            pyxel.line(hx - f * pull, hy, hx + f * 4, hy, 4)
+            pyxel.line(hx - f * pull, hy, hx + f * 5, hy, 4)
             if self.state_t < 14 and (self.state_t // 2) % 2:
-                pyxel.pset(hx + f * 5, hy, 15)  # блеск наконечника: сейчас выстрелит
+                pyxel.pset(hx + f * 6, hy, 15)  # блеск наконечника: сейчас выстрелит
         self.draw_status()
 
 
@@ -492,8 +496,8 @@ class Arrow:
 class Dummy(Enemy):
     """Соломенное чучело для отработки ударов: не нападает и не погибает."""
 
-    w = 10
-    h = 18
+    w = 12
+    h = 24
     max_hp = 999
     contact_dmg = 0
     knock = 0
@@ -524,15 +528,15 @@ class Dummy(Enemy):
         if self.flash:
             for c in range(1, 16):
                 pyxel.pal(c, 15)
-        pyxel.rect(cx - 1, b - 20, 2, 20, 2)  # кол
+        pyxel.rect(cx - 1, b - 26, 2, 26, 2)  # кол
         top = cx + lean
-        pyxel.line(top - 7, b - 15, top + 7, b - 15, 4)  # руки-перекладина
-        pyxel.pset(top - 8, b - 16, 10)
-        pyxel.pset(top + 8, b - 16, 10)
-        pyxel.elli(top - 5, b - 15, 10, 11, 10)  # соломенное тулово
-        pyxel.line(top - 4, b - 10, top + 4, b - 10, 4)  # опояска
-        pyxel.circ(top, b - 19, 3, 7)  # мешок-голова
-        pyxel.pset(top - 1, b - 20, 1)
-        pyxel.pset(top + 1, b - 20, 1)
-        pyxel.line(top - 1, b - 18, top + 1, b - 18, 8)
+        pyxel.line(top - 9, b - 18, top + 9, b - 18, 4)  # руки-перекладина
+        pyxel.pset(top - 10, b - 19, 10)
+        pyxel.pset(top + 10, b - 19, 10)
+        pyxel.elli(top - 6, b - 19, 12, 13, 10)  # соломенное тулово
+        pyxel.line(top - 5, b - 12, top + 5, b - 12, 4)  # опояска
+        pyxel.circ(top, b - 23, 4, 7)  # мешок-голова
+        pyxel.pset(top - 1, b - 24, 1)
+        pyxel.pset(top + 2, b - 24, 1)
+        pyxel.line(top - 1, b - 21, top + 2, b - 21, 8)
         pyxel.pal()

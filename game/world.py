@@ -42,7 +42,7 @@ class World:
         self.lost_pile = None
         lost = st.lost_silver
         if lost and lost.get("level") == self.level.name and lost.get("amount", 0) > 0:
-            self.lost_pile = LostSilver(lost["x"], lost["y"], lost["amount"])
+            self.lost_pile = LostSilver(lost["x"], lost["y"] + Player.h, lost["amount"])
         self.pending_enemies = []
 
         # --- босс и арена

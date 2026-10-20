@@ -13,22 +13,12 @@ from types import SimpleNamespace
 
 import pyxel
 
-from . import audio, gfx
+from . import audio, sprites
 from .config import TILE
 from .enemies import Enemy, _sign
 from .entities import draw_humanoid, draw_stun_stars, rect_overlap
 
 JARL_AXE = SimpleNamespace(icon="axe", tint={"6": "5", "f": "6"})
-
-JARL_TINT = {"a": "6", "e": "5", "2": "1", "5": "1", "7": "5"}
-JARL_ARMOR = {"8": "1", "a": "a", "e": "5"}
-JARL_HELMET = {"6": "5", "a": "a"}
-
-
-def build_sprites():
-    gfx.build_humanoid(gfx.BOSS_ROW, base_tint=JARL_TINT, armor_tint=JARL_ARMOR,
-                       helmet=True, helmet_tint=JARL_HELMET)
-
 
 class Shockwave:
     """Ударная волна по полу. Не отбивается; блок тратит силы, прыжок и перекат спасают."""
@@ -81,8 +71,8 @@ class JarlBoss(Enemy):
     name = "ЯРЛ-ДРАУГР ХРЁРЕК"
     subtitle = "Владыка кургана"
     flag = "boss:jarl"
-    w = 16
-    h = 30
+    w = 20
+    h = 44
     max_hp = 70
     contact_dmg = 2
     knock = 0
@@ -102,7 +92,6 @@ class JarlBoss(Enemy):
         self.attack_cd = 30
         self.dying = False
         self.leap_t = 0
-        build_sprites()
 
     # ------------------------------------------------------------ свойства
     @property
@@ -261,7 +250,7 @@ class JarlBoss(Enemy):
         if st == "chain_strike":
             self.vx *= 0.8
             self.state_t -= 1
-            reach = 26
+            reach = 32
             hx = self.x + self.w if self.facing > 0 else self.x - reach
             if not self.struck and rect_overlap(hx, self.y + 4, reach, self.h - 4, p):
                 if p.take_damage(self.CHAIN_DMG, self.cx, world, source=self) != "miss":
@@ -300,7 +289,7 @@ class JarlBoss(Enemy):
             return
         if st == "sweep":
             self.state_t -= 1
-            reach = 30
+            reach = 38
             if not self.struck and rect_overlap(self.x - reach, self.y + 4, self.w + reach * 2, self.h - 4, p):
                 if p.take_damage(self.SWEEP_DMG, self.cx, world, parryable=False, source=self) != "miss":
                     self.struck = True
@@ -332,50 +321,46 @@ class JarlBoss(Enemy):
     def pose(self):
         st = self.state
         t = self.anim_t
-        if st in ("sleep", "rise", "roar", "dying"):
-            return gfx.F_IDLE[0], None
+        if st == "dying":
+            return sprites.anim_at("death", (120 - self.state_t) / 100)
+        if self.stun_t > 0 or st == "roar":
+            return sprites.anim("hurt")
+        if st in ("sleep", "rise"):
+            return sprites.anim("idle", 0)
         if st == "chain_wind":
-            return gfx.F_ATTACK, -115
+            return sprites.anim("attack", 0)
         if st == "chain_strike":
-            return gfx.F_ATTACK, 60 if self.combo_n % 2 == 0 else -40
-        if st == "leap_wind":
-            return gfx.F_IDLE[1], -100
+            return sprites.anim("attack" if self.combo_n % 2 == 0 else "attack2", 2)
+        if st in ("leap_wind", "sweep_wind"):
+            return sprites.anim("heavy", 0)
         if st == "leap":
-            return (gfx.F_JUMP if self.vy < 0 else gfx.F_FALL), -100
-        if st == "sweep_wind":
-            return gfx.F_ATTACK, -140
+            return sprites.anim("jump" if self.vy < 0 else "fall")
         if st == "sweep":
-            return gfx.F_ATTACK, (t * 40) % 360
+            return sprites.anim("attack", t // 2)
         if st == "recover":
-            return gfx.F_IDLE[0], 30
-        moving = abs(self.vx) > 0.05
-        return (gfx.F_RUN[(t // 10) % 4] if moving else gfx.F_IDLE[(pyxel.frame_count // 30) % 2]), None
+            return sprites.anim("attack", 3)
+        if abs(self.vx) > 0.05:
+            return sprites.anim("run", t // 8)
+        return sprites.anim("idle", pyxel.frame_count // 20)
 
     def draw(self):
-        frame, angle = self.pose()
+        frame = self.pose()
         st = self.state
         t = self.anim_t
+        extra = {}
         # Цвет глаз: тлеют во сне, синие в первой фазе, красные в ярости.
         if st == "sleep" or (st == "rise" and (self.state_t // 4) % 2 and self.state_t > 45):
-            pyxel.pal(12, 1)
+            extra["c"] = "1"
         elif self.phase == 2 or (st == "roar" and self.state_t < 60):
-            pyxel.pal(12, 8)
+            extra["c"] = "8"
         # Предупреждения: золото — прыжок, красная вспышка — круговой удар.
         if st == "leap_wind" and (self.state_t // 3) % 2:
-            for c in (1, 5):
-                pyxel.pal(c, 10)
+            extra.update({"1": "a", "5": "a"})
         if st == "sweep_wind" and (self.state_t // 3) % 2:
-            for c in range(1, 16):
-                pyxel.pal(c, 8)
-        dy = 2 if st == "leap_wind" else 0
-        if st == "dying":
-            dy = min(10, (120 - self.state_t) // 10)
-            if (t // 3) % 2:
-                for c in range(1, 16):
-                    pyxel.pal(c, 7)
+            extra.update({format(c, "x"): "8" for c in range(1, 16)})
+        flash = self.flash > 0 or (st == "dying" and (t // 3) % 2)
         shake = random.randint(-1, 1) if st in ("roar", "rise") and self.state_t < 60 else 0
-        draw_humanoid(gfx.BOSS_ROW, frame, self.x + shake, self.y + dy, self.facing,
-                      weapon=JARL_AXE, weapon_angle=angle, flash=self.flash > 0, scale=2)
-        pyxel.pal()
+        draw_humanoid(sprites.JARL_LOOK, frame, self.cx + shake, self.y + self.h, self.facing,
+                      weapon=JARL_AXE if st != "dying" else None, flash=flash, scale=2, extra=extra)
         if self.stun_t > 0:
             draw_stun_stars(self.cx, self.y - 8)

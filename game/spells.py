@@ -46,7 +46,7 @@ def release(spell_id, player, world):
     spirit = player.inv.stats["spi"]
     if spell_id == "rune_fire":
         x = player.cx + player.facing * 8
-        world.projectiles.append(Fireball(x, player.y + 6, player.facing * 3.2, fire_damage(spirit)))
+        world.projectiles.append(Fireball(x, player.y + 9, player.facing * 3.2, fire_damage(spirit)))
         audio.sfx(audio.FIRE)
     elif spell_id == "rune_shield":
         player.shield_t = SHIELD_TIME
@@ -115,10 +115,10 @@ def draw_shield_aura(player):
         return
     cx, cy = player.cx, player.cy
     pyxel.dither(0.25)
-    pyxel.circ(cx, cy, 13, 10)
+    pyxel.circ(cx, cy, 16, 10)
     pyxel.dither(1.0)
-    pyxel.circb(cx, cy, 13, 10)
+    pyxel.circb(cx, cy, 16, 10)
     a0 = pyxel.frame_count * 0.08
     for i in range(4):
         a = a0 + i * math.pi / 2
-        pyxel.pset(cx + math.cos(a) * 13, cy + math.sin(a) * 13, 15)
+        pyxel.pset(cx + math.cos(a) * 16, cy + math.sin(a) * 16, 15)

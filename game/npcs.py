@@ -6,15 +6,20 @@ from types import SimpleNamespace
 HERO_NAME = "Ратмир"
 
 
+def look(torso="hero_torso_plain", torso_tint=None, head="hero_head_male", head_tint=None,
+         helmet=None, helmet_tint=None, legs_tint=None):
+    """Облик жителя: слои спрайтов с перекраской (см. sprites.py)."""
+    layers = [("hero_legs", legs_tint), (torso, torso_tint), (head, head_tint)]
+    if helmet:
+        layers.append((helmet, helmet_tint))
+    return tuple(layers)
+
+
 @dataclass(frozen=True)
 class NpcDef:
     name: str
     lines: list
-    base_tint: dict = field(default_factory=dict)
-    body_tint: dict = field(default_factory=dict)
-    female: bool = False
-    helmet: bool = False
-    helmet_tint: dict = field(default_factory=dict)
+    look: tuple = field(default_factory=look)
     held: object = None  # предмет в руке (как оружие героя)
     facing: int = 1
     shop: str = None  # id лавки из shops.py, если житель торгует
@@ -32,8 +37,7 @@ NPCS = {
             "За восточными воротами завелись волки, а у старых камней бродят драугры.",
             "Ступай туда, витязь. Кузнец и купец помогут собраться в дорогу.",
         ],
-        base_tint={"a": "6"},
-        body_tint={"8": "c", "a": "a"},
+        look=look("hero_torso_dress", {"8": "c", "a": "a"}, head_tint={"a": "6"}),
     ),
     "smith": NpcDef(
         "Кузнец Добрыня",
@@ -42,8 +46,7 @@ NPCS = {
             "Нож - не оружие для витязя. Говорят, в лесу есть сундук с добрым мечом.",
             "Принеси железные крицы - драугры таскают их с собой. Перекую твой клинок, станет злее.",
         ],
-        base_tint={"a": "2"},
-        body_tint={"8": "4", "a": "2"},
+        look=look("hero_torso_leather", head_tint={"a": "2"}),
         held=SMITH_HAMMER,
         facing=-1,
         shop="smith",
@@ -55,11 +58,8 @@ NPCS = {
             "Мёд, хлеб, щиты, обереги - всё за честное серебро. Куплю и твоё добро.",
             "Погибнешь - серебро останется там, где упал. Вернись за ним, пока не поздно.",
         ],
+        look=look("hero_torso_shirt", {"7": "c", "8": "a"}, head_tint={"a": "9"}, helmet="hero_helmet_cap", legs_tint={"5": "c"}),
         shop="merchant",
-        base_tint={"a": "9"},
-        body_tint={"8": "c", "a": "a"},
-        helmet=True,
-        helmet_tint={"6": "4", "a": "7", "1": "2"},
     ),
     "herbalist": NpcDef(
         "Травница Млада",
@@ -68,10 +68,8 @@ NPCS = {
             "Настой зверобоя вернёт силу чар. А руна Беркана заживит раны - только твори её не под ударом.",
             f"Береги себя, {HERO_NAME}.",
         ],
+        look=look("hero_torso_dress", {"8": "b", "a": "7"}, head="hero_head_female"),
         shop="herbalist",
-        base_tint={"a": "a"},
-        body_tint={"8": "b", "a": "7"},
-        female=True,
         facing=-1,
     ),
     "guard": NpcDef(
@@ -81,9 +79,7 @@ NPCS = {
             "Подойди к воротам и нажми вверх, чтобы выйти из города.",
             "Держи щит повыше, витязь.",
         ],
-        base_tint={"a": "4"},
-        body_tint={"8": "6", "a": "5", "e": "6"},
-        helmet=True,
+        look=look("hero_torso_mail", head_tint={"a": "4"}, helmet="hero_helmet_shishak"),
         held=GUARD_SPEAR,
         facing=-1,
     ),
@@ -98,9 +94,7 @@ NPCS = {
             "В прыжке жми вниз и удар - обрушишься на врага сверху.",
             "F - чары выученной руны, E - сменить руну. Синяя полоса - твоя мана.",
         ],
-        base_tint={"a": "5"},
-        body_tint={"8": "8", "a": "a"},
-        helmet=True,
+        look=look("hero_torso_shirt", {"7": "8", "8": "a"}, head_tint={"a": "5"}, helmet="hero_helmet_shishak"),
         held=SimpleNamespace(icon="sword", tint={}),
     ),
 }

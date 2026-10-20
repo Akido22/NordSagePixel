@@ -2,7 +2,7 @@
 
 import pyxel
 
-from . import audio, font, gfx
+from . import audio, font, gfx, sprites
 from .config import DISPLAY_SCALE, FPS, GAME_TITLE, PALETTE, SCREEN_H, SCREEN_W
 
 
@@ -13,6 +13,7 @@ class App:
         pyxel.colors[:] = PALETTE
         font.init()
         gfx.init()
+        sprites.init()
         audio.init()
         from .scenes import TitleScene
         self.scene = TitleScene(self)

@@ -4,9 +4,9 @@ import math
 
 import pyxel
 
-from . import gfx, items, ui
+from . import gfx, items, sprites, ui
 from .config import TILE
-from .npcs import NPC_INDEX, NPCS
+from .npcs import NPCS
 
 GRAVITY = 0.22
 MAX_FALL = 4.5
@@ -98,41 +98,28 @@ class Body:
 
 
 # ===================================================================== отрисовка гуманоидов
-def draw_humanoid(row, frame, x, y, facing, weapon=None, shield=None, weapon_angle=None,
-                  flash=False, scale=1, shield_front=False):
-    """Рисует гуманоида со щитом и оружием. (x, y) — левый верхний угол хитбокса 8x15.
+def draw_humanoid(look, frame, cx, bottom, facing, weapon=None, shield=None, weapon_angle="auto",
+                  flash=False, scale=1, shield_front=False, extra=None, weapon_tint=None):
+    """Рисует гуманоида из слоёв облика со щитом и оружием.
 
-    weapon_angle — угол оружия в руке для удара (None — оружие опущено в стойке).
-    shield_front — щит поднят перед собой (блок), иначе висит за спиной.
+    (cx, bottom) — середина низа хитбокса. weapon_angle="auto" — угол из кадра
+    (None в кадре — оружие не рисуется). shield_front — щит поднят перед собой.
     """
-    sx = x - 4 * scale
-    sy = y - 5 * scale
-
-    def fx(px):
-        return px if facing > 0 else gfx.FRAME_W - 1 - px
-
-    if flash:
-        for c in range(1, 16):
-            pyxel.pal(c, 15)
+    data = sprites.info(frame)
     if shield and not shield_front:
-        gfx.shield(shield, sx + (fx(5) + 0.5) * scale, sy + 13 * scale, scale)
-    gfx.humanoid(row, frame, sx, sy, flip=facing < 0, scale=scale)
-    if weapon and not shield_front:
-        if weapon_angle is not None:
-            hand, angle = gfx.HAND_ATTACK, weapon_angle
-        else:
-            hand, angle = gfx.HAND_IDLE, -10
-        gfx.weapon(weapon, sx + (fx(hand[0]) + 0.5) * scale, sy + (hand[1] + 0.5) * scale, facing, angle, scale)
+        bx, by = sprites.anchor(frame, "back", cx, bottom, facing, scale)
+        gfx.shield(shield, bx, by, 1.6 * scale)
+    sprites.draw_look(look, frame, cx, bottom, facing, scale, flash, extra)
+    hx, hy = sprites.anchor(frame, "hand", cx, bottom, facing, scale)
     if shield_front:
-        hand = gfx.HAND_BLOCK
-        cx = sx + (fx(hand[0]) + 0.5) * scale
-        cy = sy + (hand[1] + 0.5) * scale
         if shield:
-            gfx.shield(shield, cx, cy, scale * 1.4)
+            gfx.shield(shield, hx + facing * scale, hy, 2.0 * scale)
         elif weapon:
-            gfx.weapon(weapon, cx, cy + 2, facing, -60, scale)  # блок оружием
-    if flash:
-        pyxel.pal()
+            sprites.draw_weapon(weapon, 20, hx, hy, facing, scale, weapon_tint)  # блок оружием
+        return
+    angle = data["weapon"] if weapon_angle == "auto" else weapon_angle
+    if weapon is not None and angle is not None:
+        sprites.draw_weapon(weapon, angle, hx, hy, facing, scale, weapon_tint)
 
 
 def draw_stun_stars(cx, y):
@@ -187,9 +174,9 @@ class LostSilver:
 
     w, h = 10, 8
 
-    def __init__(self, x, y, amount):
-        self.x = x - 1
-        self.y = y + 7  # у ног героя
+    def __init__(self, x, bottom, amount):
+        self.x = x
+        self.y = bottom - self.h
         self.amount = amount
 
     def draw(self):
@@ -469,14 +456,12 @@ class Stela:
 
 
 class Npc:
-    w, h = 8, 15
+    w, h = 10, 22
 
     def __init__(self, tx, ty, npc_id):
         self.id = npc_id
         self.data = NPCS[npc_id]
-        self.row = gfx.build_npc(NPC_INDEX[npc_id], self.data.base_tint, self.data.body_tint,
-                                 self.data.female, self.data.helmet, self.data.helmet_tint)
-        self.x = tx * TILE
+        self.x = tx * TILE - 1
         self.y = (ty + 1) * TILE - self.h
         self.facing = self.data.facing
         self.line = -1  # -1: молчит
@@ -494,15 +479,16 @@ class Npc:
 
     def update(self, world):
         p = world.player
-        if abs(p.cx - (self.x + 4)) < 40:
-            self.facing = 1 if p.cx > self.x + 4 else -1
+        if abs(p.cx - (self.x + self.w / 2)) < 40:
+            self.facing = 1 if p.cx > self.x + self.w / 2 else -1
         else:
             self.facing = self.data.facing
             self.line = -1
 
     def draw(self):
-        frame = ((pyxel.frame_count + self.phase) // 36) % 2
-        draw_humanoid(self.row, frame, self.x, self.y, self.facing, weapon=self.data.held)
+        frame = sprites.anim("idle", (pyxel.frame_count + self.phase) // 18)
+        draw_humanoid(self.data.look, frame, self.x + self.w / 2, self.y + self.h, self.facing,
+                      weapon=self.data.held)
 
     def hint(self):
         return None if self.talking else "говорить"

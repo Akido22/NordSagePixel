@@ -2,7 +2,7 @@
 
 import pyxel
 
-from . import audio, controls, font, gfx, items, save, ui
+from . import audio, controls, font, gfx, items, save, sprites, ui
 from .config import GAME_TITLE, SCREEN_H, SCREEN_W
 from .entities import Sign, draw_humanoid
 from .inventory import BAG_COLS, BAG_ROWS, BAG_SIZE, xp_needed
@@ -462,8 +462,8 @@ class InventoryScene(Scene):
         pyxel.dither(0.5)
         pyxel.circ(64, 64, 22, 13)
         pyxel.dither(1.0)
-        frame = gfx.F_IDLE[(pyxel.frame_count // 32) % 2]
-        draw_humanoid(gfx.HERO_ROW, frame, 56, 50, 1, weapon=inv.equipped("weapon"),
+        frame = sprites.anim("idle", pyxel.frame_count // 15)
+        draw_humanoid(p.look, frame, 64, 96, 1, weapon=inv.equipped("weapon"),
                       shield=inv.equipped("shield"), scale=2)
         for slot, (x, y) in EQUIP_POS.items():
             item = inv.equipped(slot)

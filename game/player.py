@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pyxel
 
-from . import audio, controls, gfx, spells
+from . import audio, controls, spells, sprites
 from .config import TILE
 from .entities import Body, draw_humanoid, draw_stun_stars, rect_overlap
 
@@ -26,8 +26,8 @@ MANA_REGEN = 0.03  # в кадр (~1,8 в секунду)
 
 
 class Player(Body):
-    w = 8
-    h = 15
+    w = 10
+    h = 22
     ACCEL = 0.28
     AIR_ACCEL = 0.18
     MAX_SPEED = 1.35
@@ -71,18 +71,13 @@ class Player(Body):
         self.dead = False
         self.safe_pos = (x, y)
         self.flash = 0
+        self.dead_t = 0
+        self.look = []
         self.rebuild_look()
 
     # ------------------------------------------------------------ внешний вид
     def rebuild_look(self):
-        armor = self.inv.equipped("armor")
-        helmet = self.inv.equipped("helmet")
-        gfx.build_humanoid(
-            gfx.HERO_ROW,
-            armor_tint=armor.body_tint if armor else {"8": "7", "a": "7"},
-            helmet=helmet is not None,
-            helmet_tint=helmet.helmet_tint if helmet else None,
-        )
+        self.look = sprites.hero_look(self.inv)
         self.hp = min(self.hp, self.inv.max_hp)
 
     @property
@@ -139,6 +134,7 @@ class Player(Body):
     def update(self, world):
         level = world.level
         if self.dead:
+            self.dead_t += 1
             self.apply_gravity()
             self.vx *= 0.9
             self.move(level)
@@ -533,77 +529,77 @@ class Player(Body):
 
     # ------------------------------------------------------------ отрисовка
     def frame(self):
-        if self.state in ("attack", "charge"):
-            return gfx.F_ATTACK if self.on_ground else gfx.F_ATTACK_AIR
-        if self.state in ("block", "cast"):
-            return gfx.F_BLOCK
-        if self.state == "plunge" or not self.on_ground:
-            return gfx.F_JUMP if self.vy < 0 else gfx.F_FALL
-        if abs(self.vx) > 0.2 and self.state == "move":
-            return gfx.F_RUN[(self.anim_t // 6) % 4]
-        return gfx.F_IDLE[(pyxel.frame_count // 32) % 2]
-
-    def weapon_angle(self):
-        if self.state == "charge":
-            return -100 + math.sin(self.anim_t * 0.6) * 4
-        if self.state == "plunge":
-            return 135
-        if self.state == "attack":
+        st = self.state
+        if self.dead:
+            return sprites.anim_at("death", self.dead_t / 40)
+        if st == "roll":
+            return sprites.anim_at("roll", 1 - self.state_t / self.ROLL_TIME)
+        if st == "attack":
             p = self.attack_progress()
-            if self.attack_kind == "light" and self.combo == 1:
-                return 90 - p * 170  # обратный взмах во второй части серии
-            return -80 + p * 170
-        return None
+            if self.attack_kind == "heavy":
+                return sprites.anim_at("heavy", p, start=1)
+            name = "attack2" if self.attack_kind == "light" and self.combo == 1 else "attack"
+            return sprites.anim_at(name, p)
+        if st == "charge":
+            return sprites.anim("heavy", 0)
+        if st == "plunge":
+            return sprites.anim("plunge")
+        if st == "cast":
+            return sprites.anim("cast", self.anim_t // 6)
+        if st == "block":
+            return sprites.anim("block")
+        if st == "stun" or self.flash:
+            return sprites.anim("hurt")
+        if not self.on_ground:
+            return sprites.anim("jump" if self.vy < 0 else "fall")
+        if abs(self.vx) > 0.2 and st == "move":
+            return sprites.anim("run", self.anim_t // 5)
+        return sprites.anim("idle", pyxel.frame_count // 15)
+
+    def hand(self):
+        return sprites.anchor(self.frame(), "hand", self.cx, self.y + self.h, self.facing)
 
     def draw(self):
         if self.invuln > 0 and not self.dead and (self.invuln // 3) % 2:
             return
         weapon = self.weapon if self.weapon is not FIST else None
         shield = self.inv.equipped("shield")
-        if self.state == "roll":
-            t = self.ROLL_TIME - self.state_t
-            angle = min(360, t * 360 / 16) * self.facing
-            gfx.humanoid(gfx.HERO_ROW, gfx.F_JUMP, self.x - 4, self.y - 3, flip=self.facing < 0, rotate=angle)
-            return
-        charged = self.state == "charge" and self.charge >= CHARGE_TIME
-        if charged and (self.anim_t // 3) % 2:
-            pyxel.pal(6, 10)
-            pyxel.pal(15, 10)
+        frame = self.frame()
+        charged = self.state == "charge" and self.charge >= CHARGE_TIME and (self.anim_t // 3) % 2
         draw_humanoid(
-            gfx.HERO_ROW, self.frame(), self.x, self.y, self.facing,
-            weapon=None if self.state == "cast" else weapon,
-            shield=shield,
+            self.look, frame, self.cx, self.y + self.h, self.facing,
+            weapon=None if self.state in ("cast", "roll") or self.dead else weapon,
+            shield=shield if self.state != "roll" else None,
             shield_front=self.state == "block",
-            weapon_angle=self.weapon_angle(),
             flash=self.flash > 0,
+            weapon_tint={"6": "a", "f": "a"} if charged else None,
         )
-        pyxel.pal()
         if self.attack_active() and weapon:
-            self._draw_slash()
+            self._draw_slash(frame)
         if self.state == "stun" and self.state_t > 14:
             draw_stun_stars(self.cx, self.y - 7)
         if self.state == "cast":
             spell = spells.SPELLS[self.cast_spell]
-            hx = self.cx + self.facing * 9
+            hx, hy = sprites.anchor(frame, "hand", self.cx, self.y + self.h, self.facing)
             r = 1 + (self.anim_t // 3) % 3
-            pyxel.circ(hx, self.y + 7, r, spell.color)
-            pyxel.pset(hx, self.y + 7, 15)
+            pyxel.circ(hx + self.facing * 2, hy, r, spell.color)
+            pyxel.pset(hx + self.facing * 2, hy, 15)
         spells.draw_shield_aura(self)
 
-    def _draw_slash(self):
-        p = self.attack_progress()
+    def _draw_slash(self, frame):
+        """Дуга-след за клинком."""
+        angle = sprites.info(frame)["weapon"]
+        if angle is None:
+            return
         heavy = self.attack_kind == "heavy"
-        gx = self.x + self.w / 2 + self.facing * 4
-        gy = self.y + 7
-        r = self.weapon.reach + (6 if heavy else 2)
-        reverse = self.attack_kind == "light" and self.combo == 1
-        a1 = (90 - p * 170) if reverse else (-80 + p * 170)
-        step = 6 if reverse else -6
-        for i in range(14 if heavy else 10):
-            a = math.radians(a1 + (45 if reverse else -45) + i * step)
-            px = gx + math.cos(a) * r * self.facing
-            py = gy + math.sin(a) * r
-            col = (10 if i < 5 else 9) if heavy else (15 if i < 4 else 7)
+        hx, hy = sprites.anchor(frame, "hand", self.cx, self.y + self.h, self.facing)
+        r = 14 + (4 if heavy else 0)
+        back = 1 if self.attack_kind == "light" and self.combo == 1 else -1
+        for i in range(12 if heavy else 8):
+            a = math.radians(angle + back * i * 8)
+            px = hx + math.sin(a) * r * self.facing
+            py = hy - math.cos(a) * r
+            col = (10 if i < 5 else 9) if heavy else (15 if i < 3 else 7)
             pyxel.pset(px, py, col)
             if heavy:
                 pyxel.pset(px, py + 1, col)
