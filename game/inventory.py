@@ -1,36 +1,62 @@
 """Сума (инвентарь), снаряжение и показатели героя: уровень, опыт, очки, улучшения оружия."""
 
-from . import items
+from . import data, items
 
 BAG_COLS = 6
 BAG_ROWS = 4
 BAG_SIZE = BAG_COLS * BAG_ROWS
 MAX_STACK = 9
 
-BASE_HP = 10
-BASE_ATK = 1
-BASE_DEF = 0
-BASE_STAMINA = 100
-BASE_MANA = 30
+# Числа прокачки — в data/progression.toml.
+_P = data.load("progression.toml")
+_base = data.Section("progression.toml", "base", _P.get("base", {}))
+BASE_HP = _base.get("hp", int)
+BASE_ATK = _base.get("attack", int)
+BASE_DEF = _base.get("defense", int)
+BASE_STAMINA = _base.get("stamina", int)
+BASE_MANA = _base.get("mana", int)
+_base.check_unknown()
 
-MAX_LEVEL = 20
+_lv = data.Section("progression.toml", "levels", _P.get("levels", {}))
+MAX_LEVEL = _lv.get("max_level", int)
+XP_BASE = _lv.get("xp_base", int)
+XP_STEP = _lv.get("xp_step", int)
+POINTS_PER_LEVEL = _lv.get("points_per_level", int, 1)
+_lv.check_unknown()
+
 # Сколько даёт одно очко в показатель.
-STAT_HP = 2
-STAT_ATK = 1
-STAT_STAMINA = 12
-STAT_MANA = 8
+_st = data.Section("progression.toml", "stats", _P.get("stats", {}))
+STAT_ATK = _st.get("strength", int)
+STAT_STAMINA = _st.get("endurance", int)
+STAT_HP = _st.get("vitality", int)
+STAT_MANA = _st.get("spirit", int)
+_st.check_unknown()
 STATS = ["str", "sta", "vit", "spi"]
 STAT_NAMES = {"str": "Сила", "sta": "Стойкость", "vit": "Здоровье", "spi": "Дух"}
 STAT_HINTS = {"str": f"атака +{STAT_ATK}", "sta": f"силы +{STAT_STAMINA}", "vit": f"жизнь +{STAT_HP}",
               "spi": f"мана +{STAT_MANA}, чары +1"}
 
-MAX_UPGRADE = 3
-UPGRADE_COST = {1: (15, 1), 2: (30, 2), 3: (50, 3)}  # уровень -> (серебро, крицы)
+_fg = data.Section("progression.toml", "forge", _P.get("forge", {}))
+MAX_UPGRADE = _fg.get("max_upgrade", int)
+_costs = _fg.get("cost", list)
+_fg.check_unknown()
+if len(_costs) < MAX_UPGRADE or not all(isinstance(c, list) and len(c) == 2 for c in _costs):
+    raise data.DataError("data/progression.toml [forge] поле «cost»: нужно по паре [серебро, крицы] "
+                         "на каждую ступень до max_upgrade")
+UPGRADE_COST = {i + 1: (int(c[0]), int(c[1])) for i, c in enumerate(_costs[:MAX_UPGRADE])}
+
+_start = data.Section("progression.toml", "start", _P.get("start", {}))
+START_WEAPON = _start.get("weapon", str, None)
+START_ARMOR = _start.get("armor", str, None)
+START_ITEMS = [(str(i[0]), int(i[1])) for i in _start.get("items", list, [])]
+_start.check_unknown()
+items.check_ids([i for i in (START_WEAPON, START_ARMOR) if i] + [i for i, _ in START_ITEMS],
+                "data/progression.toml [start]")
 
 
 def xp_needed(level):
     """Сколько опыта нужно, чтобы перейти с уровня level на следующий."""
-    return 20 + 15 * (level - 1)
+    return XP_BASE + XP_STEP * (level - 1)
 
 
 class Inventory:
@@ -142,7 +168,7 @@ class Inventory:
         while self.level < MAX_LEVEL and self.xp >= xp_needed(self.level):
             self.xp -= xp_needed(self.level)
             self.level += 1
-            self.points += 1
+            self.points += POINTS_PER_LEVEL
             gained += 1
         return gained
 
@@ -256,7 +282,8 @@ class Inventory:
     @classmethod
     def starting(cls):
         inv = cls()
-        inv.equipment["weapon"] = "knife"
-        inv.equipment["armor"] = "shirt"
-        inv.add("bread", 2)
+        inv.equipment["weapon"] = START_WEAPON
+        inv.equipment["armor"] = START_ARMOR
+        for item_id, count in START_ITEMS:
+            inv.add(item_id, count)
         return inv

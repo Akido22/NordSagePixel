@@ -1,10 +1,13 @@
-"""База предметов."""
+"""База предметов: читается из data/items.toml."""
 
 from dataclasses import dataclass, field
 
+from . import data
+from .gfx import ICON_INDEX
+
 # Слоты экипировки в порядке отображения.
 SLOTS = ["weapon", "shield", "helmet", "armor", "amulet"]
-SELL_RATE = 0.4
+KINDS = SLOTS + ["consumable", "material", "rune"]
 
 SLOT_NAMES = {
     "weapon": "Оружие",
@@ -14,6 +17,9 @@ SLOT_NAMES = {
     "amulet": "Оберег",
 }
 KIND_NAMES = dict(SLOT_NAMES, consumable="Припасы", material="Для кузни", rune="Руна")
+
+_TRADE = data.Section("progression.toml", "trade", data.load("progression.toml").get("trade", {}))
+SELL_RATE = _TRADE.get("sell_rate", float)
 
 
 @dataclass(frozen=True)
@@ -35,9 +41,6 @@ class Item:
     stamina: int = 0
     # Щит: (обод, поле, умбон).
     shield_colors: tuple = (2, 4, 6)
-    # Доспех: перекраска туловища героя; шлем: перекраска шлема.
-    body_tint: dict = field(default_factory=dict)
-    helmet_tint: dict = field(default_factory=dict)
     price: int = 0  # цена в лавке; продать можно за SELL_RATE от неё
 
     @property
@@ -68,75 +71,52 @@ class Item:
         return lines
 
 
-ITEMS = {
-    it.id: it
-    for it in [
-        Item("knife", "Охотничий нож", "weapon", "knife",
-             "Простой нож из болотного железа.",
-             atk=1, reach=12, swing=14, stamina=10, price=8),
-        Item("sword", "Варяжский меч", "weapon", "sword",
-             "Клинок, выменянный у заморских купцов.",
-             atk=3, reach=16, swing=18, stamina=15, price=50),
-        Item("axe", "Секира викинга", "weapon", "axe",
-             "Тяжёлый топор северян. Рубит и щит, и шлем.",
-             atk=5, reach=15, swing=26, stamina=24, price=70),
-        Item("spear", "Рогатина", "weapon", "spear",
-             "Копьё с перекладиной, с ним ходят на медведя.",
-             atk=3, reach=24, swing=22, stamina=18, price=45),
-        Item("jarl_axe", "Секира ярла", "weapon", "axe",
-             "Секира Хрёрека. Холодна, как курганный камень.",
-             atk=7, reach=18, swing=24, stamina=22, tint={"6": "5", "f": "6"}, price=150),
-        Item("shield_round", "Круглый щит", "shield", "shield",
-             "Липовые доски, обтянутые кожей.",
-             defense=1, price=25),
-        Item("shield_red", "Червлёный щит", "shield", "shield",
-             "Алый щит дружинника, окованный медью.",
-             defense=2, tint={"4": "8", "2": "a", "6": "a"}, shield_colors=(10, 8, 10), price=60),
-        Item("cap", "Меховая шапка", "helmet", "cap",
-             "Тёплая шапка с лисьей опушкой.",
-             defense=1, helmet_tint={"6": "4", "a": "7", "1": "2"}, price=20),
-        Item("shishak", "Шлем-шишак", "helmet", "helmet",
-             "Островерхий шлем с наносником.",
-             defense=2, price=55),
-        Item("shirt", "Вышитая рубаха", "armor", "shirt",
-             "Мать вышила обережный узор на вороте.",
-             defense=0, hp=1, body_tint={"8": "7", "a": "8"}, price=10),
-        Item("leather", "Кожаный доспех", "armor", "shirt",
-             "Вываренная кожа в несколько слоёв.",
-             defense=1, tint={"7": "4", "8": "2"}, body_tint={"8": "4", "a": "2"}, price=40),
-        Item("mail", "Кольчуга", "armor", "shirt",
-             "Тысячи стальных колец. Тяжела, но надёжна.",
-             defense=3, tint={"7": "6", "8": "5"}, body_tint={"8": "6", "a": "5", "e": "6"}, price=90),
-        Item("hammer", "Оберег-молот", "amulet", "hammer",
-             "Знак громовержца. Рука бьёт крепче.",
-             atk=1, price=45),
-        Item("lunnitsa", "Лунница", "amulet", "lunnitsa",
-             "Серебряный полумесяц, хранит от хвори.",
-             hp=3, price=50),
-        Item("honey", "Горшок мёда", "consumable", "honey",
-             "Густой липовый мёд. Восстанавливает силы.",
-             heal=5, price=12),
-        Item("bread", "Каравай", "consumable", "bread",
-             "Румяный хлеб в дорогу.",
-             heal=2, price=5),
-        Item("tincture", "Настой зверобоя", "consumable", "tincture",
-             "Горький красный настой. Возвращает силу чар.",
-             mana=20, price=15),
-        Item("rune_fire", "Руна Кеназ", "rune", "rune_fire",
-             "Руна огня. F - метнуть огненный шар (мана 10).",
-             price=80),
-        Item("rune_shield", "Руна Альгиз", "rune", "rune_shield",
-             "Руна защиты. Щит Перуна гасит любые удары (мана 25).",
-             price=120),
-        Item("rune_heal", "Руна Беркана", "rune", "rune_heal",
-             "Руна берёзы. Заживляет раны, но творить её долго (мана 25).",
-             price=90),
-        Item("ore", "Железная крица", "material", "ore",
-             "Ком болотного железа. Кузнец перекуёт его в доброе оружие.",
-             price=20),
-    ]
-}
+def _load_items():
+    result = {}
+    for item_id, sec in data.sections("items.toml"):
+        kind = sec.get("kind", str)
+        if kind not in KINDS:
+            raise data.DataError(f"{sec.where('kind')}: вид «{kind}» неизвестен; можно: {', '.join(KINDS)}")
+        icon = sec.get("icon", str)
+        if icon not in ICON_INDEX:
+            raise data.DataError(f"{sec.where('icon')}: нет иконки «{icon}» (есть: {', '.join(ICON_INDEX)})")
+        colors = sec.get("shield_colors", list, [2, 4, 6])
+        if len(colors) != 3 or not all(isinstance(c, int) and 0 <= c < 16 for c in colors):
+            raise data.DataError(f"{sec.where('shield_colors')}: нужно три номера цвета 0-15")
+        item = Item(
+            id=item_id,
+            name=sec.get("name", str),
+            kind=kind,
+            icon=icon,
+            desc=sec.get("desc", str, ""),
+            atk=sec.get("atk", int, 0),
+            defense=sec.get("defense", int, 0),
+            hp=sec.get("hp", int, 0),
+            heal=sec.get("heal", int, 0),
+            mana=sec.get("mana", int, 0),
+            tint=data.tint(sec, "tint"),
+            reach=sec.get("reach", int, 0),
+            swing=sec.get("swing", int, 0),
+            stamina=sec.get("stamina", int, 0),
+            shield_colors=tuple(colors),
+            price=sec.get("price", int, 0),
+        )
+        if kind == "weapon" and (item.reach <= 0 or item.swing <= 0):
+            raise data.DataError(f"{sec.where()}: у оружия должны быть reach и swing больше нуля")
+        sec.check_unknown()
+        result[item_id] = item
+    return result
+
+
+ITEMS = _load_items()
 
 
 def get(item_id):
     return ITEMS[item_id]
+
+
+def check_ids(ids, where):
+    """Проверка ссылок на предметы из других файлов данных."""
+    for item_id in ids:
+        if item_id not in ITEMS:
+            raise data.DataError(f"{where}: нет предмета «{item_id}» в data/items.toml")

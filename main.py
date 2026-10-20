@@ -1,6 +1,13 @@
 """Северная Сага — платформер на Pyxel. Запуск: python main.py"""
 
-from game.app import App
+import sys
+
+from game.data import DataError
 
 if __name__ == "__main__":
-    App().run()
+    try:
+        from game.app import App
+        App().run()
+    except DataError as e:
+        print("Ошибка в файлах данных:", e, file=sys.stderr)
+        sys.exit(1)

@@ -273,7 +273,7 @@ class World:
             coin.vx = random.uniform(-1.2, 1.2)
             coin.vy = random.uniform(-2.8, -1.6)
             self.pickups.append(coin)
-        if isinstance(enemy, Draugr) and random.random() < 0.5:
+        if random.random() < enemy.bread_chance:
             drop = Pickup(enemy.cx - 4, enemy.y, "bread")
             drop.vy = -2.5
             self.pickups.append(drop)

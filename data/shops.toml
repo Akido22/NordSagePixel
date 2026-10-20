@@ -1,0 +1,19 @@
+# Лавки. id раздела указывается у жителя в npcs.toml (поле shop).
+#   title — заголовок окна
+#   stock — что продаёт (id из items.toml); запас бесконечный
+#   tabs  — вкладки окна: buy (купить), sell (продать), forge (заточка оружия)
+
+[merchant]
+title = "ЛАВКА ТОРВАЛЬДА"
+stock = ["honey", "bread", "shield_round", "shield_red", "lunnitsa", "hammer"]
+tabs = ["buy", "sell"]
+
+[herbalist]
+title = "ТРАВЫ МЛАДЫ"
+stock = ["honey", "bread", "tincture", "rune_heal"]
+tabs = ["buy", "sell"]
+
+[smith]
+title = "КУЗНИЦА ДОБРЫНИ"
+stock = ["cap", "shishak", "leather", "mail", "sword", "spear", "ore"]
+tabs = ["buy", "sell", "forge"]

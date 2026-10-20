@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pyxel
 
-from . import audio, sprites
+from . import audio, data, sprites
 from .config import TILE
 from .enemies import Enemy, _sign
 from .entities import draw_humanoid, draw_stun_stars, rect_overlap
@@ -81,6 +81,24 @@ class JarlBoss(Enemy):
     CHAIN_DMG = 4
     SLAM_DMG = 5
     SWEEP_DMG = 5
+    RAGE_AT = 0.5
+    RAGE_SPEED = 1.3
+    WALK_SPEED = 0.55
+    CHAIN_REACH = 32
+    CHAIN_WINDUP = 24
+    CHAIN_NEXT = 15
+    CHAIN_RECOVER = 50
+    STUN = 70
+    RAGE_STUN = 50
+    SHOCK_SPEED = 2.3
+    RAGE_SHOCK_SPEED = 2.8
+    LEAP_WINDUP = 34
+    SLAM_RECOVER = 46
+    LEAP_DISTANCE = 70
+    SWEEP_REACH = 38
+    SWEEP_WINDUP = 40
+    SWEEP_RECOVER = 45
+    SWEEP_CHANCE = 0.4
 
     def __init__(self, x, y):
         super().__init__(x, y)
@@ -100,7 +118,7 @@ class JarlBoss(Enemy):
 
     @property
     def speed(self):
-        return 1.3 if self.phase == 2 else 1.0
+        return self.RAGE_SPEED if self.phase == 2 else 1.0
 
     def vulnerable(self):
         return self.state not in ("sleep", "rise", "roar") and not self.dying
@@ -134,7 +152,7 @@ class JarlBoss(Enemy):
             self.stun_t = 0
             audio.sfx(audio.ROAR)
             world.shake(8)
-        elif self.phase == 1 and self.hp <= self.max_hp // 2:
+        elif self.phase == 1 and self.hp <= self.max_hp * self.RAGE_AT:
             self._set("roar", 80)
             self.stun_t = 0
             audio.sfx(audio.HEAVY)
@@ -144,7 +162,7 @@ class JarlBoss(Enemy):
 
     def on_parried(self, world, player):
         if self.state == "chain_strike":
-            self.stun_t = 70 if self.phase == 1 else 50
+            self.stun_t = self.STUN if self.phase == 1 else self.RAGE_STUN
             self._set("recover", 30)
             self.vx = 0
 
@@ -223,20 +241,20 @@ class JarlBoss(Enemy):
                 self.vx = 0
                 return
             if self.attack_cd <= 0:
-                if self.phase == 2 and dist < 44 and random.random() < 0.4:
-                    self._set("sweep_wind", 40 / self.speed)
+                if self.phase == 2 and dist < 44 and random.random() < self.SWEEP_CHANCE:
+                    self._set("sweep_wind", self.SWEEP_WINDUP / self.speed)
                     self.vx = 0
                     return
                 if dist < 34:
                     self.combo_n = 0
-                    self._set("chain_wind", 24 / self.speed)
+                    self._set("chain_wind", self.CHAIN_WINDUP / self.speed)
                     self.vx = 0
                     return
-                if dist > 70 or random.random() < 0.02:
-                    self._set("leap_wind", 34 / self.speed)
+                if dist > self.LEAP_DISTANCE or random.random() < 0.02:
+                    self._set("leap_wind", self.LEAP_WINDUP / self.speed)
                     self.vx = 0
                     return
-            self.vx = self.facing * 0.55 * self.speed if dist > 26 else 0
+            self.vx = self.facing * self.WALK_SPEED * self.speed if dist > 26 else 0
             return
         if st == "chain_wind":
             self.vx = 0
@@ -250,7 +268,7 @@ class JarlBoss(Enemy):
         if st == "chain_strike":
             self.vx *= 0.8
             self.state_t -= 1
-            reach = 32
+            reach = self.CHAIN_REACH
             hx = self.x + self.w if self.facing > 0 else self.x - reach
             if not self.struck and rect_overlap(hx, self.y + 4, reach, self.h - 4, p):
                 if p.take_damage(self.CHAIN_DMG, self.cx, world, source=self) != "miss":
@@ -259,9 +277,9 @@ class JarlBoss(Enemy):
                 self.combo_n += 1
                 if self.combo_n < 3:
                     self.facing = _sign(dx)
-                    self._set("chain_wind", 15 / self.speed)
+                    self._set("chain_wind", self.CHAIN_NEXT / self.speed)
                 else:
-                    self._set("recover", 50 / self.speed)
+                    self._set("recover", self.CHAIN_RECOVER / self.speed)
             return
         if st == "leap_wind":
             self.vx = 0
@@ -289,12 +307,12 @@ class JarlBoss(Enemy):
             return
         if st == "sweep":
             self.state_t -= 1
-            reach = 38
+            reach = self.SWEEP_REACH
             if not self.struck and rect_overlap(self.x - reach, self.y + 4, self.w + reach * 2, self.h - 4, p):
                 if p.take_damage(self.SWEEP_DMG, self.cx, world, parryable=False, source=self) != "miss":
                     self.struck = True
             if self.state_t <= 0:
-                self._set("recover", 45 / self.speed)
+                self._set("recover", self.SWEEP_RECOVER / self.speed)
             return
         if st == "recover":
             self.vx *= 0.7
@@ -309,13 +327,13 @@ class JarlBoss(Enemy):
         audio.sfx(audio.SLAM)
         world.shake(7)
         world.dust(self.cx, ground, 12)
-        speed = 2.8 if self.phase == 2 else 2.3
+        speed = self.RAGE_SHOCK_SPEED if self.phase == 2 else self.SHOCK_SPEED
         world.projectiles.append(Shockwave(self.cx - 10, ground, -speed))
         world.projectiles.append(Shockwave(self.cx + 10, ground, speed))
         p = world.player
         if rect_overlap(self.x - 6, ground - 12, self.w + 12, 12, p):
             p.take_damage(self.SLAM_DMG, self.cx, world, parryable=False, source=self)
-        self._set("recover", 46 / self.speed)
+        self._set("recover", self.SLAM_RECOVER / self.speed)
 
     # ------------------------------------------------------------ отрисовка
     def pose(self):
@@ -364,3 +382,35 @@ class JarlBoss(Enemy):
                       weapon=JARL_AXE if st != "dying" else None, flash=flash, scale=2, extra=extra)
         if self.stun_t > 0:
             draw_stun_stars(self.cx, self.y - 8)
+
+
+# ===================================================================== числа из data/bosses.toml
+def _load():
+    secs = dict(data.sections("bosses.toml"))
+    if "jarl" not in secs:
+        raise data.DataError("data/bosses.toml: нет раздела [jarl]")
+    sec = secs["jarl"]
+    Shockwave.DAMAGE = sec.get("shockwave_damage", int, Shockwave.DAMAGE)
+    silver = sec.get("silver", int, JarlBoss.silver[0])
+    sec.used.add("silver")
+    data.apply(JarlBoss, sec, {
+        "name": ("name", str), "subtitle": ("subtitle", str), "hp": ("max_hp", int),
+        "contact_damage": ("contact_dmg", int), "xp": ("xp", int),
+        "rage_at": ("RAGE_AT", float), "rage_speed": ("RAGE_SPEED", float), "walk_speed": ("WALK_SPEED", float),
+        "chain_damage": ("CHAIN_DMG", int), "chain_reach": ("CHAIN_REACH", int),
+        "chain_windup": ("CHAIN_WINDUP", int), "chain_next": ("CHAIN_NEXT", int),
+        "chain_recover": ("CHAIN_RECOVER", int), "stun_frames": ("STUN", int),
+        "rage_stun_frames": ("RAGE_STUN", int), "slam_damage": ("SLAM_DMG", int),
+        "shockwave_speed": ("SHOCK_SPEED", float), "rage_shockwave_speed": ("RAGE_SHOCK_SPEED", float),
+        "leap_windup": ("LEAP_WINDUP", int), "slam_recover": ("SLAM_RECOVER", int),
+        "leap_distance": ("LEAP_DISTANCE", int), "sweep_damage": ("SWEEP_DMG", int),
+        "sweep_reach": ("SWEEP_REACH", int), "sweep_windup": ("SWEEP_WINDUP", int),
+        "sweep_recover": ("SWEEP_RECOVER", int), "sweep_chance": ("SWEEP_CHANCE", float),
+    })
+    JarlBoss.silver = (silver, silver)
+    for name in secs:
+        if name != "jarl":
+            raise data.DataError(f"data/bosses.toml [{name}]: такого босса нет в коде (есть: jarl)")
+
+
+_load()

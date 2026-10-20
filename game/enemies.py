@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pyxel
 
-from . import audio, sprites
+from . import audio, data, sprites
 from .config import TILE
 from .entities import Body, draw_humanoid, draw_stun_stars, overlap, rect_overlap
 
@@ -26,6 +26,7 @@ class Enemy(Body):
     silver = (1, 2)
     xp = 3
     ore_chance = 0.0  # шанс выронить железную крицу
+    bread_chance = 0.0  # шанс выронить каравай
     stun_time = 80
 
     def __init__(self, x, y):
@@ -148,6 +149,11 @@ class Wolf(Enemy):
     silver = (1, 3)
     xp = 5
     CROUCH = 20
+    LUNGE_CD = 90
+    LUNGE_RANGE = 44
+    CHASE_SPEED = 1.25
+    PATROL_SPEED = 0.5
+    SIGHT = 110
 
     def __init__(self, x, y):
         super().__init__(x, y)
@@ -180,22 +186,22 @@ class Wolf(Enemy):
                 self.vy = -2.4
                 self.lunging = True
                 self.lunge_t = 0
-                self.lunge_cd = 90
+                self.lunge_cd = self.LUNGE_CD
             return
         if not self.on_ground:
             return
         p = world.player
-        if self.player_near(world, 110):
+        if self.player_near(world, self.SIGHT):
             self.facing = _sign(p.cx - self.cx)
             if not self.ground_ahead(world.level, self.facing):
                 self.vx = 0
-            elif abs(p.cx - self.cx) < 44 and self.lunge_cd == 0:
+            elif abs(p.cx - self.cx) < self.LUNGE_RANGE and self.lunge_cd == 0:
                 self.crouch_t = self.CROUCH
                 self.vx = 0
             else:
-                self.vx = self.facing * 1.25
+                self.vx = self.facing * self.CHASE_SPEED
         else:
-            self.patrol(world, 0.5)
+            self.patrol(world, self.PATROL_SPEED)
 
     def draw(self):
         eyes = {"a": "8"} if self.crouch_t and (self.crouch_t // 3) % 2 else None  # глаза вспыхивают
@@ -229,6 +235,10 @@ class Draugr(Enemy):
     stun_time = 90
     REACH = 18
     WINDUP = 34
+    RECOVER = 40
+    CHASE_SPEED = 0.55
+    PATROL_SPEED = 0.3
+    SIGHT = 120
 
     def __init__(self, x, y):
         super().__init__(x, y)
@@ -247,17 +257,17 @@ class Draugr(Enemy):
     def think(self, world):
         p = world.player
         if self.state == "walk":
-            if self.player_near(world, 120, 24):
+            if self.player_near(world, self.SIGHT, 24):
                 self.facing = _sign(p.cx - self.cx)
                 if abs(p.cx - self.cx) < 20:
                     self._set("windup", self.WINDUP)
                     self.vx = 0
                 elif self.ground_ahead(world.level, self.facing):
-                    self.vx = self.facing * 0.55
+                    self.vx = self.facing * self.CHASE_SPEED
                 else:
                     self.vx = 0
             else:
-                self.patrol(world, 0.3)
+                self.patrol(world, self.PATROL_SPEED)
             return
         self.vx = 0
         self.state_t -= 1
@@ -272,7 +282,7 @@ class Draugr(Enemy):
                 self.struck = False
                 audio.sfx(audio.SWING)
             elif self.state == "strike":
-                self._set("recover", 40)
+                self._set("recover", self.RECOVER)
             else:
                 self._set("walk", 0)
 
@@ -310,6 +320,7 @@ class ShieldDraugr(Draugr):
     silver = (4, 6)
     xp = 14
     GUARD_MAX = 3
+    GUARD_REGEN = 120
 
     def __init__(self, x, y):
         super().__init__(x, y)
@@ -335,7 +346,7 @@ class ShieldDraugr(Draugr):
     def think(self, world):
         if self.guard < self.GUARD_MAX:
             self.guard_regen += 1
-            if self.guard_regen >= 120:
+            if self.guard_regen >= self.GUARD_REGEN:
                 self.guard += 1
                 self.guard_regen = 0
         super().think(world)
@@ -359,6 +370,10 @@ class Archer(Enemy):
     ore_chance = 0.25
     stun_time = 90
     AIM = 44
+    SHOT_CD = 50
+    ARROW_SPEED = 2.8
+    KEEP_AWAY = 48
+    SIGHT = 150
 
     def __init__(self, x, y):
         super().__init__(x, y)
@@ -380,17 +395,18 @@ class Archer(Enemy):
             self.facing = _sign(p.cx - self.cx)
             self.state_t -= 1
             if self.state_t <= 0:
-                world.projectiles.append(Arrow(self.cx + self.facing * 8, self.y + 9, self.facing * 2.8))
+                world.projectiles.append(Arrow(self.cx + self.facing * 8, self.y + 9,
+                                               self.facing * self.ARROW_SPEED))
                 audio.sfx(audio.BOW)
                 self.state = "walk"
-                self.cooldown = 50
+                self.cooldown = self.SHOT_CD
             return
-        if not self.player_near(world, 150, 40):
+        if not self.player_near(world, self.SIGHT, 40):
             self.patrol(world, 0.3)
             return
         dist = abs(p.cx - self.cx)
         self.facing = _sign(p.cx - self.cx)
-        if dist < 48 and self.ground_ahead(world.level, -self.facing):
+        if dist < self.KEEP_AWAY and self.ground_ahead(world.level, -self.facing):
             self.vx = -self.facing * 0.7  # пятится, не сводя глаз с героя
         elif dist > 130 and self.ground_ahead(world.level, self.facing):
             self.vx = self.facing * 0.5
@@ -431,6 +447,7 @@ class Archer(Enemy):
 class Arrow:
     w, h = 6, 2
     DAMAGE = 2
+    REFLECTED_DAMAGE = 3
 
     def __init__(self, x, y, vx):
         self.x = x - self.w / 2
@@ -475,7 +492,7 @@ class Arrow:
         else:
             for e in world.enemies:
                 if not e.dead and rect_overlap(self.x, self.y, self.w, self.h, e):
-                    e.take_hit(3, _sign(self.vx), world)
+                    e.take_hit(self.REFLECTED_DAMAGE, _sign(self.vx), world)
                     self.dead = True
                     break
 
@@ -540,3 +557,43 @@ class Dummy(Enemy):
         pyxel.pset(top + 2, b - 24, 1)
         pyxel.line(top - 1, b - 21, top + 2, b - 21, 8)
         pyxel.pal()
+
+
+# ===================================================================== числа из data/enemies.toml
+_COMMON = {
+    "hp": ("max_hp", int), "contact_damage": ("contact_dmg", int), "knockback": ("knock", float),
+    "xp": ("xp", int), "silver": ("silver", list), "ore_chance": ("ore_chance", float),
+    "bread_chance": ("bread_chance", float), "stun_frames": ("stun_time", int), "sight": ("SIGHT", int),
+}
+
+
+def _load():
+    secs = dict(data.sections("enemies.toml"))
+    spec = {
+        "wolf": (Wolf, {"lunge_damage": ("lunge_dmg", int), "crouch_frames": ("CROUCH", int),
+                        "lunge_cooldown": ("LUNGE_CD", int), "lunge_range": ("LUNGE_RANGE", int),
+                        "chase_speed": ("CHASE_SPEED", float), "patrol_speed": ("PATROL_SPEED", float)}),
+        "draugr": (Draugr, {"strike_damage": ("strike_dmg", int), "reach": ("REACH", int),
+                            "windup_frames": ("WINDUP", int), "recover_frames": ("RECOVER", int),
+                            "chase_speed": ("CHASE_SPEED", float), "patrol_speed": ("PATROL_SPEED", float)}),
+        "shield_draugr": (ShieldDraugr, {"guard": ("GUARD_MAX", int), "guard_regen_frames": ("GUARD_REGEN", int)}),
+        "archer": (Archer, {"aim_frames": ("AIM", int), "shot_cooldown": ("SHOT_CD", int),
+                            "arrow_speed": ("ARROW_SPEED", float), "keep_away": ("KEEP_AWAY", int)}),
+    }
+    for name in secs:
+        if name not in spec:
+            raise data.DataError(f"data/enemies.toml [{name}]: такого врага нет в коде; есть: {', '.join(spec)}")
+    for name, (cls, own) in spec.items():
+        if name not in secs:
+            raise data.DataError(f"data/enemies.toml: нет раздела [{name}]")
+        sec = secs[name]
+        if name == "archer":
+            Arrow.DAMAGE = sec.get("arrow_damage", int, Arrow.DAMAGE)
+            Arrow.REFLECTED_DAMAGE = sec.get("reflected_damage", int, Arrow.REFLECTED_DAMAGE)
+        data.apply(cls, sec, dict(_COMMON, **own))
+        lo, hi = cls.silver
+        if lo > hi:
+            raise data.DataError(f"{sec.where('silver')}: [от, до] — первое число не может быть больше второго")
+
+
+_load()

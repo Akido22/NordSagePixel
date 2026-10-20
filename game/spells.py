@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 import pyxel
 
-from . import audio
+from . import audio, data, items
 from .config import TILE
 from .entities import rect_overlap
 
@@ -22,23 +22,39 @@ class Spell:
     cast: int  # кадров на сотворение (герой уязвим)
     color: int  # цвет свечения руки
     ground_only: bool = False
+    damage: int = 0  # огонь: урон (+ Дух)
+    speed: float = 0.0  # огонь: скорость полёта
+    duration: int = 0  # щит: сколько кадров гасит удары
+    heal: int = 0  # лечение (+ Дух)
 
 
-SPELLS = {
-    "rune_fire": Spell("Огонь Кеназ", cost=10, cast=14, color=9),
-    "rune_shield": Spell("Щит Альгиз", cost=25, cast=10, color=10),
-    "rune_heal": Spell("Беркана", cost=25, cast=36, color=11, ground_only=True),
-}
+KNOWN = ("rune_fire", "rune_shield", "rune_heal")  # чары, у которых есть действие в коде
 
-SHIELD_TIME = 150  # кадров, пока щит Перуна гасит удары
+
+def _load():
+    result = {}
+    for rune_id, sec in data.sections("spells.toml"):
+        if rune_id not in KNOWN:
+            raise data.DataError(f"{sec.where()}: для руны «{rune_id}» нет действия в коде; есть: {', '.join(KNOWN)}")
+        items.check_ids([rune_id], sec.where())
+        result[rune_id] = Spell(
+            name=sec.get("name", str), cost=sec.get("cost", int), cast=sec.get("cast", int),
+            color=sec.get("color", int), ground_only=sec.get("ground_only", bool, False),
+            damage=sec.get("damage", int, 0), speed=sec.get("speed", float, 0.0),
+            duration=sec.get("duration", int, 0), heal=sec.get("heal", int, 0))
+        sec.check_unknown()
+    return result
+
+
+SPELLS = _load()
 
 
 def fire_damage(spirit):
-    return 4 + spirit
+    return SPELLS["rune_fire"].damage + spirit
 
 
 def heal_amount(spirit):
-    return 6 + spirit
+    return SPELLS["rune_heal"].heal + spirit
 
 
 def release(spell_id, player, world):
@@ -46,10 +62,11 @@ def release(spell_id, player, world):
     spirit = player.inv.stats["spi"]
     if spell_id == "rune_fire":
         x = player.cx + player.facing * 8
-        world.projectiles.append(Fireball(x, player.y + 9, player.facing * 3.2, fire_damage(spirit)))
+        speed = SPELLS["rune_fire"].speed
+        world.projectiles.append(Fireball(x, player.y + 9, player.facing * speed, fire_damage(spirit)))
         audio.sfx(audio.FIRE)
     elif spell_id == "rune_shield":
-        player.shield_t = SHIELD_TIME
+        player.shield_t = SPELLS["rune_shield"].duration
         audio.sfx(audio.CHARGED)
         world.sparks(player.cx, player.cy, 10)
     elif spell_id == "rune_heal":

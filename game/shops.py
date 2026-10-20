@@ -1,6 +1,8 @@
-"""Лавки: что продаёт каждый торговец и какие вкладки у его окна."""
+"""Лавки: что продаёт каждый торговец и какие вкладки у его окна (data/shops.toml)."""
 
 from dataclasses import dataclass
+
+from . import data, items
 
 
 @dataclass(frozen=True)
@@ -12,18 +14,19 @@ class Shop:
 
 TAB_NAMES = {"buy": "Купить", "sell": "Продать", "forge": "Ковать"}
 
-SHOPS = {
-    "merchant": Shop(
-        "ЛАВКА ТОРВАЛЬДА",
-        ("honey", "bread", "shield_round", "shield_red", "lunnitsa", "hammer"),
-    ),
-    "herbalist": Shop(
-        "ТРАВЫ МЛАДЫ",
-        ("honey", "bread", "tincture", "rune_heal"),
-    ),
-    "smith": Shop(
-        "КУЗНИЦА ДОБРЫНИ",
-        ("cap", "shishak", "leather", "mail", "sword", "spear", "ore"),
-        tabs=("buy", "sell", "forge"),
-    ),
-}
+
+def _load():
+    result = {}
+    for shop_id, sec in data.sections("shops.toml"):
+        stock = sec.get("stock", list)
+        items.check_ids(stock, sec.where("stock"))
+        tabs = sec.get("tabs", list, ["buy", "sell"])
+        for tab in tabs:
+            if tab not in TAB_NAMES:
+                raise data.DataError(f"{sec.where('tabs')}: вкладки «{tab}» нет; можно: buy, sell, forge")
+        result[shop_id] = Shop(sec.get("title", str), tuple(stock), tuple(tabs))
+        sec.check_unknown()
+    return result
+
+
+SHOPS = _load()

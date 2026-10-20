@@ -5,24 +5,31 @@ from types import SimpleNamespace
 
 import pyxel
 
-from . import audio, controls, spells, sprites
+from . import audio, controls, data, spells, sprites
 from .config import TILE
 from .entities import Body, draw_humanoid, draw_stun_stars, rect_overlap
 
 FIST = SimpleNamespace(id="fist", icon=None, atk=0, reach=9, swing=14, stamina=8, tint={})
 
-STAMINA_REGEN = 1.1  # в кадр
-STAMINA_DELAY = 35  # пауза перед восстановлением после траты
-EXHAUST_DELAY = 70  # пауза, если силы кончились совсем
-ROLL_COST = 28
-HEAVY_COST = 32
-PLUNGE_COST = 14
-PARRY_WINDOW = 10  # кадров после поднятия щита, когда удар парируется
-BLOCK_COOLDOWN = 14  # нельзя сразу снова поднять щит (иначе парирование — спам)
-CHARGE_TIME = 20  # кадров удержания после взмаха для тяжёлого удара
-COMBO_MAX = 3
-INPUT_BUFFER = 8  # кадров, сколько помнится нажатие (в т.ч. во время стоп-кадра)
-MANA_REGEN = 0.03  # в кадр (~1,8 в секунду)
+# Числа боя и движения — в data/player.toml.
+_D = data.load("player.toml")
+_mv = data.Section("player.toml", "movement", _D.get("movement", {}))
+_sm = data.Section("player.toml", "stamina", _D.get("stamina", {}))
+_cb = data.Section("player.toml", "combat", _D.get("combat", {}))
+_mg = data.Section("player.toml", "magic", _D.get("magic", {}))
+
+STAMINA_REGEN = _sm.get("regen", float)  # в кадр
+STAMINA_DELAY = _sm.get("delay", int)  # пауза перед восстановлением после траты
+EXHAUST_DELAY = _sm.get("exhaust_delay", int)  # пауза, если силы кончились совсем
+ROLL_COST = _sm.get("roll_cost", int)
+HEAVY_COST = _sm.get("heavy_cost", int)
+PLUNGE_COST = _sm.get("plunge_cost", int)
+PARRY_WINDOW = _cb.get("parry_window", int)  # кадров после поднятия щита, когда удар парируется
+BLOCK_COOLDOWN = _cb.get("block_cooldown", int)  # нельзя сразу снова поднять щит (иначе парирование — спам)
+CHARGE_TIME = _cb.get("charge_frames", int)  # кадров удержания после взмаха для тяжёлого удара
+COMBO_MAX = _cb.get("combo_max", int)
+INPUT_BUFFER = _cb.get("input_buffer", int)  # кадров, сколько помнится нажатие (в т.ч. во время стоп-кадра)
+MANA_REGEN = _mg.get("mana_regen", float)  # в кадр
 
 
 class Player(Body):
@@ -30,13 +37,15 @@ class Player(Body):
     h = 22
     ACCEL = 0.28
     AIR_ACCEL = 0.18
-    MAX_SPEED = 1.35
-    JUMP_V = -4.1
-    COYOTE = 6
-    JUMP_BUFFER = 7
-    INVULN = 70
-    ROLL_TIME = 22
-    ROLL_IFRAMES = (2, 16)
+    MAX_SPEED = _mv.get("max_speed", float)
+    JUMP_V = -_mv.get("jump_velocity", float)
+    COYOTE = _mv.get("coyote_frames", int)
+    JUMP_BUFFER = _mv.get("jump_buffer", int)
+    INVULN = _cb.get("invuln_frames", int)
+    ROLL_TIME = _cb.get("roll_frames", int)
+    ROLL_IFRAMES = tuple(_cb.get("roll_iframes", list))
+    for _sec in (_mv, _sm, _cb, _mg):
+        _sec.check_unknown()
 
     def __init__(self, x, y, inventory):
         super().__init__(x, y)
