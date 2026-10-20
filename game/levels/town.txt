@@ -43,7 +43,7 @@ from_forest = 101,19
 106,19 = test_level from_town town
 
 [chests]
-29,19 = honey
+29,19 = rune_fire, honey
 
 [signs]
 100,19 = {RIGHT} Лесная тропа. Волки, драугры и старые камни.

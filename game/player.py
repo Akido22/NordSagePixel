@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pyxel
 
-from . import audio, controls, gfx
+from . import audio, controls, gfx, spells
 from .config import TILE
 from .entities import Body, draw_humanoid, draw_stun_stars, rect_overlap
 
@@ -22,6 +22,7 @@ BLOCK_COOLDOWN = 14  # нельзя сразу снова поднять щит 
 CHARGE_TIME = 20  # кадров удержания после взмаха для тяжёлого удара
 COMBO_MAX = 3
 INPUT_BUFFER = 8  # кадров, сколько помнится нажатие (в т.ч. во время стоп-кадра)
+MANA_REGEN = 0.03  # в кадр (~1,8 в секунду)
 
 
 class Player(Body):
@@ -55,6 +56,10 @@ class Player(Body):
         self.block_t = 0
         self.block_cd = 0
         self.stamina = inventory.max_stamina
+        self.mana = float(inventory.max_mana)
+        self.shield_t = 0  # щит Перуна
+        self.cast_spell = None
+        self.buf_cast = 0
         self.stamina_wait = 0
         self.stamina_flash = 0
         self.invuln = 0
@@ -107,6 +112,9 @@ class Player(Body):
         rate = STAMINA_REGEN * (0.35 if self.state == "block" else 1.0)
         self.stamina = min(self.stamina_max, self.stamina + rate)
 
+    def _regen_mana(self):
+        self.mana = min(self.inv.max_mana, self.mana + MANA_REGEN)
+
     # ------------------------------------------------------------ ввод
     def poll_input(self):
         """Запоминает нажатия. Вызывается каждый кадр, даже во время стоп-кадра."""
@@ -116,6 +124,8 @@ class Player(Body):
             self.buf_roll = INPUT_BUFFER
         if controls.pressed("jump"):
             self.jump_buf = self.JUMP_BUFFER
+        if controls.pressed("cast"):
+            self.buf_cast = INPUT_BUFFER
 
     def _take(self, name):
         """Забирает запомненное нажатие ("attack" или "roll")."""
@@ -135,7 +145,8 @@ class Player(Body):
             return
 
         self._regen()
-        for name in ("invuln", "flash", "stamina_flash", "block_cd"):
+        self._regen_mana()
+        for name in ("invuln", "flash", "stamina_flash", "block_cd", "shield_t"):
             if getattr(self, name) > 0:
                 setattr(self, name, getattr(self, name) - 1)
         self.anim_t += 1
@@ -143,7 +154,7 @@ class Player(Body):
 
         handler = getattr(self, "_st_" + self.state)
         handler(world, direction)
-        for name in ("buf_attack", "buf_roll", "jump_buf"):
+        for name in ("buf_attack", "buf_roll", "jump_buf", "buf_cast"):
             if getattr(self, name) > 0:
                 setattr(self, name, getattr(self, name) - 1)
 
@@ -215,6 +226,8 @@ class Player(Body):
         elif controls.held("block") and self.on_ground and self.block_cd == 0:
             self._set("block")
             self.block_t = 0
+        elif self._take("cast"):
+            self._start_cast(world)
         elif self._take("attack"):
             if self.can_act():
                 if not self.on_ground and controls.held("down"):
@@ -222,6 +235,36 @@ class Player(Body):
                 else:
                     self.combo = 0
                     self._start_attack(world, "light" if self.on_ground else "air")
+
+    # --- чары
+    def _start_cast(self, world):
+        rune = self.inv.spell
+        if rune is None:
+            world.toast("Ты не знаешь ни одной руны", 6)
+            audio.sfx(audio.DENY)
+            return
+        spell = spells.SPELLS[rune]
+        if spell.ground_only and not self.on_ground:
+            audio.sfx(audio.DENY)
+            return
+        if self.mana < spell.cost:
+            world.toast("Не хватает маны", 12)
+            audio.sfx(audio.DENY)
+            return
+        self.mana -= spell.cost
+        self.cast_spell = rune
+        self._set("cast", spell.cast)
+        audio.sfx(audio.CHARGED)
+
+    def _st_cast(self, world, direction):
+        self._brake(0.3 if self.on_ground else 0.05)
+        if not self.on_ground:
+            self.vy = min(self.vy, 0.6)  # в воздухе чары чуть замедляют падение
+        self.state_t -= 1
+        if self.state_t <= 0:
+            spells.release(self.cast_spell, self, world)
+            self.cast_spell = None
+            self._set("move")
 
     # --- перекат
     def _start_roll(self, world, direction):
@@ -413,6 +456,12 @@ class Player(Body):
         """Возвращает "miss", "parry", "blocked" или "hit"."""
         if self.dead or self.invuln > 0 or self.rolling_invuln():
             return "miss"
+        if self.shield_t > 0 and not unblockable:
+            audio.sfx(audio.BLOCK)
+            world.sparks(self.cx, self.cy, 6)
+            if source is not None and hasattr(source, "on_blocked"):
+                source.on_blocked(world, self)
+            return "blocked"
         front = (from_x - self.cx) * self.facing >= 0
         if self.state == "block" and front and not unblockable:
             if parryable and self.block_t <= PARRY_WINDOW:
@@ -486,7 +535,7 @@ class Player(Body):
     def frame(self):
         if self.state in ("attack", "charge"):
             return gfx.F_ATTACK if self.on_ground else gfx.F_ATTACK_AIR
-        if self.state == "block":
+        if self.state in ("block", "cast"):
             return gfx.F_BLOCK
         if self.state == "plunge" or not self.on_ground:
             return gfx.F_JUMP if self.vy < 0 else gfx.F_FALL
@@ -522,7 +571,7 @@ class Player(Body):
             pyxel.pal(15, 10)
         draw_humanoid(
             gfx.HERO_ROW, self.frame(), self.x, self.y, self.facing,
-            weapon=weapon,
+            weapon=None if self.state == "cast" else weapon,
             shield=shield,
             shield_front=self.state == "block",
             weapon_angle=self.weapon_angle(),
@@ -533,6 +582,13 @@ class Player(Body):
             self._draw_slash()
         if self.state == "stun" and self.state_t > 14:
             draw_stun_stars(self.cx, self.y - 7)
+        if self.state == "cast":
+            spell = spells.SPELLS[self.cast_spell]
+            hx = self.cx + self.facing * 9
+            r = 1 + (self.anim_t // 3) % 3
+            pyxel.circ(hx, self.y + 7, r, spell.color)
+            pyxel.pset(hx, self.y + 7, 15)
+        spells.draw_shield_aura(self)
 
     def _draw_slash(self):
         p = self.attack_progress()

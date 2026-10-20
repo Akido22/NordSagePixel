@@ -13,20 +13,21 @@ SLOT_NAMES = {
     "armor": "Доспех",
     "amulet": "Оберег",
 }
-KIND_NAMES = dict(SLOT_NAMES, consumable="Припасы", material="Для кузни")
+KIND_NAMES = dict(SLOT_NAMES, consumable="Припасы", material="Для кузни", rune="Руна")
 
 
 @dataclass(frozen=True)
 class Item:
     id: str
     name: str
-    kind: str  # слот из SLOTS, "consumable" (припасы) или "material" (для кузни)
+    kind: str  # слот из SLOTS, "consumable" (припасы), "material" (для кузни), "rune" (чары)
     icon: str
     desc: str
     atk: int = 0
     defense: int = 0
     hp: int = 0
     heal: int = 0
+    mana: int = 0  # припасы: сколько маны возвращают
     tint: dict = field(default_factory=dict)
     # Оружие: дальность удара (пикс.), длительность замаха (кадры), расход выносливости.
     reach: int = 0
@@ -57,6 +58,8 @@ class Item:
             lines.append(f"Здоровье +{self.hp}")
         if self.heal:
             lines.append(f"Лечит {self.heal}")
+        if self.mana:
+            lines.append(f"Мана +{self.mana}")
         if self.reach:
             speed = "быстрый" if self.swing <= 16 else "средний" if self.swing <= 22 else "медленный"
             lines.append(f"Удар: {speed}")
@@ -116,6 +119,18 @@ ITEMS = {
         Item("bread", "Каравай", "consumable", "bread",
              "Румяный хлеб в дорогу.",
              heal=2, price=5),
+        Item("tincture", "Настой зверобоя", "consumable", "tincture",
+             "Горький красный настой. Возвращает силу чар.",
+             mana=20, price=15),
+        Item("rune_fire", "Руна Кеназ", "rune", "rune_fire",
+             "Руна огня. F - метнуть огненный шар (мана 10).",
+             price=80),
+        Item("rune_shield", "Руна Альгиз", "rune", "rune_shield",
+             "Руна защиты. Щит Перуна гасит любые удары (мана 25).",
+             price=120),
+        Item("rune_heal", "Руна Беркана", "rune", "rune_heal",
+             "Руна берёзы. Заживляет раны, но творить её долго (мана 25).",
+             price=90),
         Item("ore", "Железная крица", "material", "ore",
              "Ком болотного железа. Кузнец перекуёт его в доброе оружие.",
              price=20),

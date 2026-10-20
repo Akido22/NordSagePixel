@@ -321,7 +321,8 @@ class World:
             left = []
             for item_id in obj.loot:
                 if p.inv.add(item_id):
-                    self.toast("Получено: " + items.get(item_id).name, 10)
+                    item = items.get(item_id)
+                    self.toast(("Выучена: " if item.kind == "rune" else "Получено: ") + item.name, 10)
                 else:
                     left.append(item_id)
             obj.loot = left
@@ -334,6 +335,7 @@ class World:
                 point.active = point is obj
             self.state.save_point = self._key(obj.uid)
             p.hp = p.inv.max_hp
+            p.mana = p.inv.max_mana
             self.float_text(p.cx, p.y - 4, "РУНЫ" if isinstance(obj, Runestone) else "ПРЕДКИ", 10)
             self.save_game()
             self.ui_request = ("rest", obj)
@@ -403,6 +405,11 @@ class World:
                 self._interact(self.near)
             if controls.pressed("heal"):
                 self.use_heal_item()
+            if controls.pressed("next_rune"):
+                rune = p.inv.next_spell()
+                if rune:
+                    self.toast("Руна: " + items.get(rune).name, 12)
+                    audio.sfx(audio.MOVE)
             for ex in self.edge_exits:
                 if overlap(p, ex) and self.exit_to is None:
                     self._leave(ex.target, ex.spawn)

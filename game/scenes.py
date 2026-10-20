@@ -8,6 +8,7 @@ from .entities import Sign, draw_humanoid
 from .inventory import BAG_COLS, BAG_ROWS, BAG_SIZE, xp_needed
 from .level import Background
 from .menus import NpcMenuScene, RestScene
+from .spells import SPELLS
 from .state import GameState
 from .world import World
 
@@ -87,6 +88,8 @@ CONTROLS_TEXT = [
     ("Удар сверху в прыжке", f"{font.ARROW_DOWN} + удар"),
     ("Щит, парирование", "C / L"),
     ("Перекат", "V / SHIFT"),
+    ("Чары руны", "F / U"),
+    ("Сменить руну", "E / O"),
     ("Спрыгнуть с доски", f"{font.ARROW_DOWN} + прыжок"),
     ("Говорить, торговать, открыть", f"{font.ARROW_UP} / W"),
     ("Подлечиться", "Q / H"),
@@ -112,7 +115,7 @@ class ControlsScene(Scene):
         ui.panel(12, 14, 232, 170)
         ui.title_plate(SCREEN_W // 2, 7, "УПРАВЛЕНИЕ")
         for i, (action, keys) in enumerate(CONTROLS_TEXT):
-            y = 28 + i * 11
+            y = 27 + i * 10
             font.text(22, y, action, 7, shadow=0)
             font.text(150, y, keys, 10, shadow=0)
         font.text_center(SCREEN_W // 2, 172, "Геймпад тоже работает", 5)
@@ -180,32 +183,45 @@ class PlayScene(Scene):
         p = w.player
         inv = p.inv
         # Здоровье и выносливость.
-        pyxel.rect(2, 2, 122, 28, 0)
-        pyxel.rectb(2, 2, 122, 28, 2)
+        pyxel.rect(2, 2, 122, 32, 0)
+        pyxel.rectb(2, 2, 122, 32, 2)
         need = xp_needed(inv.level)
-        pyxel.line(3, 28, 3 + int(118 * inv.xp / need), 28, 10)
+        pyxel.line(3, 32, 3 + int(118 * inv.xp / need), 32, 10)
         lvl_col = 10 if inv.points and (pyxel.frame_count // 15) % 2 else 6
-        font.text(96, 19, f"УР.{inv.level}" + ("+" if inv.points else ""), lvl_col)
+        font.text(96, 23, f"УР.{inv.level}" + ("+" if inv.points else ""), lvl_col)
         gfx.icon("heart", 5, 3)
         ui.bar(15, 4, 60, 6, p.hp, inv.max_hp, 8)
         font.text(79, 3, f"{p.hp}/{inv.max_hp}", 7)
         stamina_col = 8 if p.stamina_flash and (p.stamina_flash // 3) % 2 else 11
         ui.bar(15, 11, 60, 4, p.stamina, p.stamina_max, stamina_col, shine=False)
-        gfx.icon("coin", 5, 18)
-        font.text(15, 19, str(inv.silver), 7)
+        ui.bar(15, 16, 60, 4, p.mana, inv.max_mana, 12, shine=False)
+        font.text(79, 14, str(int(p.mana)), 12)
+        gfx.icon("coin", 5, 22)
+        font.text(15, 23, str(inv.silver), 7)
         idx = inv.first_consumable()
         if idx is not None:
             item = inv.item_at(idx)
             total = sum(inv.count_at(i) for i in range(len(inv.bag)) if inv.item_at(i) and inv.item_at(i).heal)
-            gfx.icon(item.icon, 52, 18, item.tint)
-            font.text(62, 19, f"x{total} Q", 7)
+            gfx.icon(item.icon, 52, 22, item.tint)
+            font.text(62, 23, f"x{total} Q", 7)
+        # Выбранная руна.
+        rune = inv.spell
+        if rune is not None:
+            ritem = items.get(rune)
+            cost = SPELLS[rune].cost
+            ready = p.mana >= cost
+            pyxel.rect(126, 2, 22, 32, 0)
+            pyxel.rectb(126, 2, 22, 32, 12 if ready else 2)
+            gfx.icon(ritem.icon, 129, 5, ritem.tint, scale=2)
+            font.text(130, 24, "F", 12 if ready else 5)
+            font.text(137, 24, str(cost), 12 if ready else 5)
         # Сообщения.
         banner_on = 0 < w.title_t < 170
         for i, (text, col, life) in enumerate(w.toasts):
             if life < 20 and (life // 2) % 2:
                 continue
             tw = font.text_width(text)
-            y = (76 if banner_on else 32) + i * 11
+            y = (76 if banner_on else 38) + i * 11
             pyxel.dither(0.7)
             pyxel.rect(SCREEN_W // 2 - tw // 2 - 4, y - 2, tw + 8, 11, 0)
             pyxel.dither(1.0)
@@ -402,6 +418,16 @@ class InventoryScene(Scene):
                 elif item.kind == "material":
                     self._say("Это для кузни: отнеси Добрыне")
                     audio.sfx(audio.DENY)
+                elif item.kind == "consumable" and item.mana and not item.heal:
+                    p = self.player
+                    if p.mana >= self.inv.max_mana:
+                        self._say("Сила чар и так полна")
+                        audio.sfx(audio.DENY)
+                    else:
+                        p.mana = min(self.inv.max_mana, p.mana + item.mana)
+                        self.inv.remove_at(key)
+                        self._say(f"{item.name}: +{item.mana} маны")
+                        audio.sfx(audio.HEAL)
                 elif item.kind == "consumable":
                     if self.player.hp >= self.inv.max_hp:
                         self._say("Ты и так полон сил")
@@ -464,6 +490,18 @@ class InventoryScene(Scene):
             y = BAG_Y + (i // BAG_COLS) * SLOT_SIZE
             ui.item_box(x, y, SLOT_SIZE - 1, inv.item_at(i), inv.count_at(i),
                         selected=(kind == "bag" and key == i))
+
+        # --- выученные руны
+        font.text(BAG_X, 112, "Руны", 6)
+        if not inv.spells:
+            font.text(BAG_X + 30, 112, "пока нет", 5)
+        for i, rune in enumerate(inv.spells):
+            rx = BAG_X + 30 + i * 14
+            ritem = items.get(rune)
+            if rune == inv.spell:
+                pyxel.rectb(rx - 2, 108, 12, 12, 12)
+            gfx.icon(ritem.icon, rx, 110, ritem.tint)
+        font.text(SCREEN_W - 12 - font.text_width("(E)"), 112, "(E)", 5)
 
         # --- описание выбранного
         item = inv.equipped(key) if kind == "slot" else inv.item_at(key)

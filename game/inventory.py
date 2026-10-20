@@ -11,15 +11,18 @@ BASE_HP = 10
 BASE_ATK = 1
 BASE_DEF = 0
 BASE_STAMINA = 100
+BASE_MANA = 30
 
 MAX_LEVEL = 20
 # Сколько даёт одно очко в показатель.
 STAT_HP = 2
 STAT_ATK = 1
 STAT_STAMINA = 12
-STATS = ["str", "sta", "vit"]
-STAT_NAMES = {"str": "Сила", "sta": "Стойкость", "vit": "Здоровье"}
-STAT_HINTS = {"str": f"атака +{STAT_ATK}", "sta": f"силы +{STAT_STAMINA}", "vit": f"жизнь +{STAT_HP}"}
+STAT_MANA = 8
+STATS = ["str", "sta", "vit", "spi"]
+STAT_NAMES = {"str": "Сила", "sta": "Стойкость", "vit": "Здоровье", "spi": "Дух"}
+STAT_HINTS = {"str": f"атака +{STAT_ATK}", "sta": f"силы +{STAT_STAMINA}", "vit": f"жизнь +{STAT_HP}",
+              "spi": f"мана +{STAT_MANA}, чары +1"}
 
 MAX_UPGRADE = 3
 UPGRADE_COST = {1: (15, 1), 2: (30, 2), 3: (50, 3)}  # уровень -> (серебро, крицы)
@@ -40,11 +43,20 @@ class Inventory:
         self.points = 0
         self.stats = {s: 0 for s in STATS}
         self.upgrades = {}  # id оружия -> уровень заточки (+1..+3)
+        self.spells = []  # выученные руны (id предметов вида "rune")
+        self.active_spell = 0
 
     # ------------------------------------------------------------ сума
     def add(self, item_id, count=1):
-        """Кладёт предмет в суму. Возвращает False, если места нет."""
+        """Кладёт предмет в суму. Возвращает False, если места нет.
+
+        Руны не занимают места: найденная руна сразу запоминается.
+        """
         item = items.get(item_id)
+        if item.kind == "rune":
+            if item_id not in self.spells:
+                self.spells.append(item_id)
+            return True
         if item.stackable:
             for cell in self.bag:
                 if cell and cell[0] == item_id and cell[1] + count <= MAX_STACK:
@@ -190,6 +202,25 @@ class Inventory:
         return BASE_STAMINA + self.stats["sta"] * STAT_STAMINA
 
     @property
+    def max_mana(self):
+        return BASE_MANA + self.stats["spi"] * STAT_MANA
+
+    def knows(self, rune_id):
+        return rune_id in self.spells
+
+    @property
+    def spell(self):
+        """Id выбранной руны или None."""
+        if not self.spells:
+            return None
+        return self.spells[self.active_spell % len(self.spells)]
+
+    def next_spell(self):
+        if self.spells:
+            self.active_spell = (self.active_spell + 1) % len(self.spells)
+        return self.spell
+
+    @property
     def defense(self):
         return BASE_DEF + self._sum("defense")
 
@@ -197,7 +228,8 @@ class Inventory:
     def to_dict(self):
         return {"bag": self.bag, "equipment": self.equipment, "silver": self.silver,
                 "level": self.level, "xp": self.xp, "points": self.points,
-                "stats": self.stats, "upgrades": self.upgrades}
+                "stats": self.stats, "upgrades": self.upgrades,
+                "spells": self.spells, "active_spell": self.active_spell}
 
     @classmethod
     def from_dict(cls, data):
@@ -217,6 +249,8 @@ class Inventory:
                 inv.stats[stat] = int(value)
         inv.upgrades = {k: min(MAX_UPGRADE, int(v)) for k, v in data.get("upgrades", {}).items()
                         if k in items.ITEMS}
+        inv.spells = [s for s in data.get("spells", []) if s in items.ITEMS]
+        inv.active_spell = int(data.get("active_spell", 0))
         return inv
 
     @classmethod

@@ -151,7 +151,10 @@ class TradeScene(Overlay):
         kind, item, idx = row
         inv = self.inv
         if kind == "buy":
-            if inv.silver < item.price:
+            if item.kind == "rune" and inv.knows(item.id):
+                self.say("Эту руну ты уже знаешь", 6)
+                audio.sfx(audio.DENY)
+            elif inv.silver < item.price:
                 self.say("Не хватает серебра", 8)
                 audio.sfx(audio.DENY)
             elif not inv.add(item.id):
@@ -218,7 +221,9 @@ class TradeScene(Overlay):
             font.text(lx + 12, y + 2, self._fit(name, 80), 7)
             if kind == "forge" and idx is None:
                 ui.rhombus(lx + self.LIST_W - 22, y + 5, 2, 10)  # надетое оружие
-            if kind == "buy":
+            if kind == "buy" and item.kind == "rune" and inv.knows(item.id):
+                tag, col = "есть", 5
+            elif kind == "buy":
                 tag, col = str(item.price), (10 if inv.silver >= item.price else 8)
             elif kind == "sell":
                 tag, col = str(item.sell_price), 10
@@ -327,6 +332,7 @@ class RestScene(Overlay):
                 p = self.world.player
                 p.hp = inv.max_hp
                 p.stamina = p.stamina_max
+                p.mana = inv.max_mana
                 audio.sfx(audio.CHARGED)
                 self.say(f"{STAT_NAMES[stat]}: {inv.stats[stat]}")
             else:
@@ -337,7 +343,7 @@ class RestScene(Overlay):
         inv = self.inv
         self.play.world.draw()
         ui.dim(0.65)
-        ui.panel(36, 22, SCREEN_W - 72, 150)
+        ui.panel(20, 22, SCREEN_W - 40, 150)
         ui.title_plate(SCREEN_W // 2, 15, self.title)
         cx = SCREEN_W // 2
         font.text_center(cx, 40, f"Уровень {inv.level}", 10, shadow=1)
@@ -347,21 +353,21 @@ class RestScene(Overlay):
         pts_col = 10 if inv.points and (pyxel.frame_count // 15) % 2 else 7
         font.text_center(cx, 72, f"Свободных очков: {inv.points}", pts_col)
         for i, stat in enumerate(STATS):
-            y = 88 + i * 14
+            y = 86 + i * 13
             sel = i == self.index
             if sel:
-                pyxel.rect(50, y - 3, SCREEN_W - 100, 13, 2)
-                pyxel.rectb(50, y - 3, SCREEN_W - 100, 13, 10)
-            font.text(58, y, STAT_NAMES[stat], 10 if sel else 7)
-            font.text(124, y, str(inv.stats[stat]), 15)
-            font.text(140, y, f"({STAT_HINTS[stat]})", 5)
-        y = 88 + len(STATS) * 14 + 4
+                pyxel.rect(30, y - 3, SCREEN_W - 60, 12, 2)
+                pyxel.rectb(30, y - 3, SCREEN_W - 60, 12, 10)
+            font.text(38, y, STAT_NAMES[stat], 10 if sel else 7)
+            font.text(110, y, str(inv.stats[stat]), 15)
+            font.text(126, y, f"({STAT_HINTS[stat]})", 5)
+        y = 86 + len(STATS) * 13 + 3
         sel = self.index == len(STATS)
         font.text_center(cx, y, "Встать", 10 if sel else 7, shadow=1)
         if sel:
             ui.rhombus(cx - 24, y + 3, 2, 8)
             ui.rhombus(cx + 23, y + 3, 2, 8)
-        summary = f"Жизнь {inv.max_hp}   Атака {inv.attack}   Силы {inv.max_stamina}"
-        font.text_center(cx, 150, summary, 6)
+        summary = f"Жизнь {inv.max_hp}  Атака {inv.attack}  Силы {inv.max_stamina}  Мана {inv.max_mana}"
+        font.text_center(cx, 152, summary, 6)
         if self.msg_t > 0:
-            font.text_center(cx, 160, self.msg, self.msg_col)
+            font.text_center(cx, 162, self.msg, self.msg_col)

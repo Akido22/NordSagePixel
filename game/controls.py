@@ -12,6 +12,8 @@ _BINDINGS = {
     "block": [pyxel.KEY_C, pyxel.KEY_L, pyxel.GAMEPAD1_BUTTON_RIGHTSHOULDER],
     "roll": [pyxel.KEY_V, pyxel.KEY_SHIFT, pyxel.KEY_SEMICOLON, pyxel.GAMEPAD1_BUTTON_B],
     "heal": [pyxel.KEY_Q, pyxel.KEY_H, pyxel.GAMEPAD1_BUTTON_LEFTSHOULDER],
+    "cast": [pyxel.KEY_F, pyxel.KEY_U, pyxel.GAMEPAD1_BUTTON_Y],
+    "next_rune": [pyxel.KEY_E, pyxel.KEY_O, pyxel.GAMEPAD1_BUTTON_LEFTSTICK],
     "inventory": [pyxel.KEY_I, pyxel.KEY_TAB, pyxel.GAMEPAD1_BUTTON_BACK],
     "pause": [pyxel.KEY_ESCAPE, pyxel.KEY_P, pyxel.GAMEPAD1_BUTTON_START],
     # меню

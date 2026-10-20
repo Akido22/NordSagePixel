@@ -17,6 +17,10 @@ SHOPS = {
         "ЛАВКА ТОРВАЛЬДА",
         ("honey", "bread", "shield_round", "shield_red", "lunnitsa", "hammer"),
     ),
+    "herbalist": Shop(
+        "ТРАВЫ МЛАДЫ",
+        ("honey", "bread", "tincture", "rune_heal"),
+    ),
     "smith": Shop(
         "КУЗНИЦА ДОБРЫНИ",
         ("cap", "shishak", "leather", "mail", "sword", "spear", "ore"),

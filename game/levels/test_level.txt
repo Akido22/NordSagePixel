@@ -50,7 +50,7 @@ from_barrow = 164,19
 21,19 = sword, shield_round
 77,19 = cap, honey, ore
 122,9 = axe, hammer
-148,11 = mail, lunnitsa
+148,11 = mail, lunnitsa, rune_shield
 158,19 = shishak, shield_red, spear, honey, ore
 
 [signs]

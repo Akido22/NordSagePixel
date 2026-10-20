@@ -26,6 +26,7 @@ BOW = 18
 GUARD_BREAK = 19
 ROAR = 25
 SLAM = 26
+FIRE = 30
 
 _SFX = {
     JUMP: ("c2e2g2", "p", "4", "s", 4),
@@ -50,6 +51,7 @@ _SFX = {
     GUARD_BREAK: ("c3a2f2c2", "s", "6", "nnnf", 5),
     ROAR: ("c1d1c1a0g0", "n", "77766", "vvvvf", 16),
     SLAM: ("c1c1g0", "n", "776", "nnf", 6),
+    FIRE: ("c3f2c2", "n", "654", "nnf", 4),
 }
 
 # Музыка: дорийский лад от ре — напев в духе северных гуслей.
